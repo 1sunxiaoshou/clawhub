@@ -75,6 +75,8 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
     GitHub({
       clientId: process.env.AUTH_GITHUB_ID ?? "",
       clientSecret: process.env.AUTH_GITHUB_SECRET ?? "",
+      issuer: "https://github.com",
+      checks: ["pkce"],
       profile(profile) {
         return {
           id: String(profile.id),

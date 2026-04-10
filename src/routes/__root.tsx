@@ -128,7 +128,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             }}
           />
           <ClientOnly>
-            <Analytics />
+            {/* Vercel Analytics removed for self-hosted environment */}
           </ClientOnly>
         </AppProviders>
         <Scripts />
