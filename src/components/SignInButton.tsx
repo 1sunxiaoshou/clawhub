@@ -1,6 +1,7 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import type { ComponentProps } from "react";
 import { getUserFacingAuthError } from "../lib/authErrorMessage";
+import { useI18n } from "../lib/i18n";
 import { clearAuthError, setAuthError } from "../lib/useAuthError";
 import { Button } from "./ui/button";
 
@@ -12,10 +13,11 @@ type SignInButtonProps = Omit<ButtonProps, "onClick" | "type"> & {
 
 export function SignInButton({
   redirectTo,
-  children = "Sign in with GitHub",
+  children,
   ...props
 }: SignInButtonProps) {
   const { signIn } = useAuthActions();
+  const { t } = useI18n();
 
   return (
     <Button
@@ -37,7 +39,7 @@ export function SignInButton({
       }}
       {...props}
     >
-      {children}
+      {children ?? t("header.signInWithGitHub")}
     </Button>
   );
 }

@@ -14,9 +14,9 @@ const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLI
         // Focus styles matching .form-input:focus
         "focus:outline-none focus:border-[color-mix(in_srgb,var(--accent)_70%,white)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_22%,transparent)]",
         // Dark mode matching [data-theme="dark"] .form-input
-        "dark:border-[rgba(255,255,255,0.12)] dark:bg-[rgba(14,28,37,0.84)]",
+        "dark:border-[rgba(255,255,255,0.12)] dark:bg-[rgba(12,22,39,0.84)]",
         "dark:placeholder:text-[rgba(184,205,216,0.68)]",
-        "dark:focus:border-[rgba(255,131,95,0.75)] dark:focus:shadow-[0_0_0_3px_rgba(255,131,95,0.2)]",
+        "dark:focus:border-[rgba(96,165,250,0.78)] dark:focus:shadow-[0_0_0_3px_rgba(96,165,250,0.22)]",
         // Disabled
         "disabled:cursor-not-allowed disabled:opacity-60",
         className,

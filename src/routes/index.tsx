@@ -15,6 +15,7 @@ import { Input } from "../components/ui/input";
 import { UserBadge } from "../components/UserBadge";
 import { convexHttp } from "../convex/client";
 import { getSkillBadges } from "../lib/badges";
+import { useI18n } from "../lib/i18n";
 import type { PublicPublisher, PublicSkill, PublicSoul } from "../lib/publicUser";
 import { getSiteMode } from "../lib/site";
 
@@ -38,9 +39,10 @@ function SkillsHome() {
   const [highlighted, setHighlighted] = useState<SkillPageEntry[]>([]);
   const [popular, setPopular] = useState<SkillPageEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const { t } = useI18n();
   const totalSkills = useQuery(api.skills.countPublicSkills);
   const totalSkillsText =
-    typeof totalSkills === "number" ? totalSkills.toLocaleString("en-US") : null;
+    typeof totalSkills === "number" ? totalSkills.toLocaleString() : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -78,19 +80,18 @@ function SkillsHome() {
           <div className="grid items-center gap-10 md:grid-cols-[1.15fr_1fr]">
             <div className="flex flex-col gap-5 fade-up" data-delay="1">
               <span className="inline-flex w-fit items-center gap-2 rounded-[var(--radius-pill)] bg-[color:var(--accent)]/10 px-4 py-1.5 text-xs font-bold text-[color:var(--accent)]">
-                A versioned registry for AI agent skills
+                {t("home.heroBadge")}
               </span>
               <h1 className="font-display text-[clamp(2.2rem,4vw,3.6rem)] font-extrabold leading-[1.1] tracking-tight text-[color:var(--ink)]">
-                ClawHub, the skill dock for sharp agents.
+                {t("home.heroTitle")}
               </h1>
               <p className="max-w-lg text-lg leading-relaxed text-[color:var(--ink-soft)]">
-                Browse, install, and publish skill packs. Versioned like npm, searchable with
-                vectors, no gatekeeping.
+                {t("home.heroDescription")}
               </p>
               {/* Stats bar */}
               {totalSkillsText && (
                 <p className="text-sm font-semibold text-[color:var(--ink-soft)]">
-                  {totalSkillsText} skills available
+                  {t("home.skillsAvailable", { count: totalSkillsText })}
                 </p>
               )}
               <div className="flex flex-wrap gap-3 pt-2">
@@ -107,13 +108,13 @@ function SkillsHome() {
                   }}
                 >
                   <Button variant="primary" size="lg">
-                    Browse skills
+                    {t("home.browseSkills")}
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
                 <Link to="/publish-skill" search={{ updateSlug: undefined }}>
                   <Button variant="outline" size="lg">
-                    Publish Skill
+                    {t("home.publishSkill")}
                   </Button>
                 </Link>
               </div>
@@ -121,7 +122,7 @@ function SkillsHome() {
             <div className="hero-card hero-search-card fade-up" data-delay="2">
               <div className="hero-install" style={{ marginTop: 18 }}>
                 <div className="text-sm font-semibold text-[color:var(--ink-soft)]">
-                  Search skills. Versioned, rollback-ready.
+                  {t("home.heroPanelTitle")}
                 </div>
                 <InstallSwitcher exampleSlug="sonoscli" />
               </div>
@@ -137,10 +138,10 @@ function SkillsHome() {
             <div className="flex items-end justify-between">
               <div>
                 <h2 className="font-display text-xl font-bold text-[color:var(--ink)]">
-                  Staff Picks
+                  {t("home.staffPicks")}
                 </h2>
                 <p className="mt-1 text-sm text-[color:var(--ink-soft)]">
-                  Curated signal — highlighted for quick trust.
+                  {t("home.staffPicksDescription")}
                 </p>
               </div>
               <Link
@@ -156,13 +157,13 @@ function SkillsHome() {
                 }}
                 className="hidden text-sm font-semibold text-[color:var(--accent)] hover:underline sm:block"
               >
-                View all
+                {t("home.viewAll")}
               </Link>
             </div>
             {!loaded && highlighted.length === 0 ? (
               <SkillCardSkeletonGrid count={6} />
             ) : highlighted.length === 0 ? (
-              <p className="text-sm text-[color:var(--ink-soft)]">No highlighted skills yet.</p>
+              <p className="text-sm text-[color:var(--ink-soft)]">{t("home.noHighlightedSkills")}</p>
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-5">
                 {highlighted.map((entry) => (
@@ -198,16 +199,16 @@ function SkillsHome() {
           <div className="flex flex-col gap-6">
             <div>
               <h2 className="font-display text-xl font-bold text-[color:var(--ink)]">
-                Popular skills
+                {t("home.popularSkills")}
               </h2>
               <p className="mt-1 text-sm text-[color:var(--ink-soft)]">
-                Most-downloaded, verified picks.
+                {t("home.popularSkillsDescription")}
               </p>
             </div>
             {!loaded && popular.length === 0 ? (
               <SkillCardSkeletonGrid count={6} />
             ) : popular.length === 0 ? (
-              <p className="text-sm text-[color:var(--ink-soft)]">No skills yet. Be the first.</p>
+              <p className="text-sm text-[color:var(--ink-soft)]">{t("home.noSkills")}</p>
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-5">
                 {popular.map((entry) => (
@@ -246,7 +247,7 @@ function SkillsHome() {
                 }}
               >
                 <Button variant="outline">
-                  See all skills
+                  {t("home.seeAllSkills")}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
@@ -261,6 +262,7 @@ function SkillsHome() {
 function OnlyCrabsHome() {
   const navigate = Route.useNavigate();
   const ensureSoulSeeds = useAction(api.seed.ensureSoulSeeds);
+  const { t } = useI18n();
   const latest = (useQuery(api.souls.list, { limit: 12 }) as PublicSoul[]) ?? [];
   const [query, setQuery] = useState("");
   const seedEnsuredRef = useRef(false);
@@ -279,19 +281,18 @@ function OnlyCrabsHome() {
           <div className="grid items-center gap-10 md:grid-cols-[1.15fr_1fr]">
             <div className="flex flex-col gap-5 fade-up" data-delay="1">
               <span className="inline-flex w-fit items-center gap-2 rounded-[var(--radius-pill)] bg-[color:var(--accent)]/10 px-4 py-1.5 text-xs font-bold text-[color:var(--accent)]">
-                SOUL.md, shared.
+                {t("home.soulsHeroBadge")}
               </span>
               <h1 className="font-display text-[clamp(2.2rem,4vw,3.6rem)] font-extrabold leading-[1.1] tracking-tight text-[color:var(--ink)]">
-                SoulHub, where system lore lives.
+                {t("home.soulsHeroTitle")}
               </h1>
               <p className="max-w-lg text-lg leading-relaxed text-[color:var(--ink-soft)]">
-                Share SOUL.md bundles, version them like docs, and keep personal system lore in one
-                public place.
+                {t("home.soulsHeroDescription")}
               </p>
               <div className="flex flex-wrap gap-3 pt-2">
                 <Link to="/publish-skill" search={{ updateSlug: undefined }}>
                   <Button variant="primary" size="lg">
-                    Publish Soul
+                    {t("home.publishSoul")}
                   </Button>
                 </Link>
                 <Link
@@ -305,7 +306,7 @@ function OnlyCrabsHome() {
                   }}
                 >
                   <Button variant="outline" size="lg">
-                    Browse souls
+                    {t("home.browseSouls")}
                   </Button>
                 </Link>
               </div>
@@ -329,7 +330,7 @@ function OnlyCrabsHome() {
               >
                 <Search className="h-4 w-4 text-[color:var(--ink-soft)]" />
                 <Input
-                  placeholder="Search souls, prompts, or lore"
+                  placeholder={t("home.soulsSearchPlaceholder")}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   className="border-none bg-transparent shadow-none focus:shadow-none focus:ring-0"
@@ -337,7 +338,7 @@ function OnlyCrabsHome() {
               </form>
               <div className="hero-install" style={{ marginTop: 18 }}>
                 <div className="text-sm font-semibold text-[color:var(--ink-soft)]">
-                  Search souls. Versioned, readable, easy to remix.
+                  {t("home.soulsHeroPanelTitle")}
                 </div>
               </div>
             </div>
@@ -350,10 +351,10 @@ function OnlyCrabsHome() {
           <div className="flex flex-col gap-6">
             <div>
               <h2 className="font-display text-xl font-bold text-[color:var(--ink)]">
-                Latest souls
+                {t("home.latestSouls")}
               </h2>
               <p className="mt-1 text-sm text-[color:var(--ink-soft)]">
-                Newest SOUL.md bundles across the hub.
+                {t("home.latestSoulsDescription")}
               </p>
             </div>
             {latest.length === 0 ? (
@@ -386,7 +387,7 @@ function OnlyCrabsHome() {
                 }}
               >
                 <Button variant="outline">
-                  See all souls
+                  {t("home.seeAllSouls")}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>

@@ -1,8 +1,9 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { Link } from "@tanstack/react-router";
-import { Menu, Monitor, Moon, Plus, Search, Sun } from "lucide-react";
+import { Languages, Menu, Monitor, Moon, Plus, Search, Sun } from "lucide-react";
 import { useMemo, useRef } from "react";
 import { gravatarUrl } from "../lib/gravatar";
+import { useI18n } from "../lib/i18n";
 import { isModerator } from "../lib/roles";
 import { getClawHubSiteUrl, getSiteMode, getSiteName } from "../lib/site";
 import { applyTheme, useThemeMode } from "../lib/theme";
@@ -26,6 +27,7 @@ export default function Header() {
   const { isAuthenticated, isLoading, me } = useAuthStatus();
   const { signOut } = useAuthActions();
   const { mode, setMode } = useThemeMode();
+  const { locale, setLocale, t } = useI18n();
   const toggleRef = useRef<HTMLDivElement | null>(null);
   const siteMode = getSiteMode();
   const siteName = useMemo(() => getSiteName(siteMode), [siteMode]);
@@ -49,6 +51,10 @@ export default function Header() {
       },
       context: { element: toggleRef.current },
     });
+  };
+
+  const toggleLocale = () => {
+    setLocale(locale === "zh-CN" ? "en" : "zh-CN");
   };
 
   const navLinks = (
@@ -89,7 +95,7 @@ export default function Header() {
           }}
           className="text-[color:var(--ink-soft)] font-semibold text-sm transition-colors duration-150 hover:text-[color:var(--ink)]"
         >
-          Skills
+          {t("header.skills")}
         </Link>
       )}
       {isSoulMode ? null : (
@@ -97,7 +103,7 @@ export default function Header() {
           to="/plugins"
           className="text-[color:var(--ink-soft)] font-semibold text-sm transition-colors duration-150 hover:text-[color:var(--ink)]"
         >
-          Plugins
+          {t("header.plugins")}
         </Link>
       )}
       <Link
@@ -118,14 +124,14 @@ export default function Header() {
         className="text-[color:var(--ink-soft)] font-semibold text-sm transition-colors duration-150 hover:text-[color:var(--ink)] inline-flex items-center gap-1.5"
       >
         <Search className="h-3.5 w-3.5" />
-        Search
+        {t("header.search")}
       </Link>
       {isSoulMode ? null : (
         <Link
           to="/about"
           className="text-[color:var(--ink-soft)] font-semibold text-sm transition-colors duration-150 hover:text-[color:var(--ink)]"
         >
-          About
+          {t("header.about")}
         </Link>
       )}
       {me ? (
@@ -133,7 +139,7 @@ export default function Header() {
           to="/stars"
           className="text-[color:var(--ink-soft)] font-semibold text-sm transition-colors duration-150 hover:text-[color:var(--ink)]"
         >
-          Stars
+          {t("header.stars")}
         </Link>
       ) : null}
       {isStaff ? (
@@ -142,7 +148,7 @@ export default function Header() {
           search={{ skill: undefined }}
           className="text-[color:var(--ink-soft)] font-semibold text-sm transition-colors duration-150 hover:text-[color:var(--ink)]"
         >
-          Management
+          {t("header.management")}
         </Link>
       ) : null}
     </>
@@ -182,7 +188,7 @@ export default function Header() {
             >
               <Button variant="primary" size="sm">
                 <Plus className="h-3.5 w-3.5" />
-                Publish
+                {t("header.publish")}
               </Button>
             </Link>
           )}
@@ -191,7 +197,7 @@ export default function Header() {
           <div className="md:hidden">
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Open menu">
+                <Button variant="ghost" size="icon" aria-label={t("header.openMenu")}>
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
@@ -203,7 +209,7 @@ export default function Header() {
                 {/* Mobile theme toggle */}
                 <div className="mt-6 flex flex-col gap-2">
                   <span className="text-xs font-bold uppercase tracking-widest text-[color:var(--ink-soft)]">
-                    Theme
+                    {t("header.theme")}
                   </span>
                   <ToggleGroup
                     type="single"
@@ -214,16 +220,25 @@ export default function Header() {
                     }}
                     aria-label="Theme mode"
                   >
-                    <ToggleGroupItem value="system" aria-label="System theme">
+                    <ToggleGroupItem value="system" aria-label={t("header.systemTheme")}>
                       <Monitor className="h-4 w-4" aria-hidden="true" />
                     </ToggleGroupItem>
-                    <ToggleGroupItem value="light" aria-label="Light theme">
+                    <ToggleGroupItem value="light" aria-label={t("header.lightTheme")}>
                       <Sun className="h-4 w-4" aria-hidden="true" />
                     </ToggleGroupItem>
-                    <ToggleGroupItem value="dark" aria-label="Dark theme">
+                    <ToggleGroupItem value="dark" aria-label={t("header.darkTheme")}>
                       <Moon className="h-4 w-4" aria-hidden="true" />
                     </ToggleGroupItem>
                   </ToggleGroup>
+                </div>
+                <div className="mt-6 flex flex-col gap-2">
+                  <span className="text-xs font-bold uppercase tracking-widest text-[color:var(--ink-soft)]">
+                    {t("header.language")}
+                  </span>
+                  <Button variant="outline" size="sm" type="button" onClick={toggleLocale}>
+                    <Languages className="h-4 w-4" />
+                    {locale === "zh-CN" ? "中文" : "EN"}
+                  </Button>
                 </div>
                 {/* Mobile publish link */}
                 {isAuthenticated && me && (
@@ -231,7 +246,7 @@ export default function Header() {
                     <Link to="/publish-skill" search={{ updateSlug: undefined }}>
                       <Button variant="primary" className="w-full">
                         <Plus className="h-4 w-4" />
-                        Publish Skill
+                        {t("header.publishSkill")}
                       </Button>
                     </Link>
                   </div>
@@ -239,6 +254,19 @@ export default function Header() {
               </SheetContent>
             </Sheet>
           </div>
+
+          {/* Desktop language toggle */}
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            onClick={toggleLocale}
+            aria-label={t("header.language")}
+            className="hidden md:inline-flex"
+          >
+            <Languages className="h-4 w-4" />
+            {locale === "zh-CN" ? "中文" : "EN"}
+          </Button>
 
           {/* Desktop theme toggle */}
           <div className="theme-toggle hidden md:block" ref={toggleRef}>
@@ -251,13 +279,13 @@ export default function Header() {
               }}
               aria-label="Theme mode"
             >
-              <ToggleGroupItem value="system" aria-label="System theme">
+              <ToggleGroupItem value="system" aria-label={t("header.systemTheme")}>
                 <Monitor className="h-4 w-4" aria-hidden="true" />
               </ToggleGroupItem>
-              <ToggleGroupItem value="light" aria-label="Light theme">
+              <ToggleGroupItem value="light" aria-label={t("header.lightTheme")}>
                 <Sun className="h-4 w-4" aria-hidden="true" />
               </ToggleGroupItem>
-              <ToggleGroupItem value="dark" aria-label="Dark theme">
+              <ToggleGroupItem value="dark" aria-label={t("header.darkTheme")}>
                 <Moon className="h-4 w-4" aria-hidden="true" />
               </ToggleGroupItem>
             </ToggleGroup>
@@ -283,13 +311,13 @@ export default function Header() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild>
-                  <Link to="/dashboard">Dashboard</Link>
+                  <Link to="/dashboard">{t("header.dashboard")}</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link to="/settings">Settings</Link>
+                  <Link to="/settings">{t("header.settings")}</Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => void signOut()}>Sign out</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void signOut()}>{t("header.signOut")}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
@@ -315,8 +343,10 @@ export default function Header() {
                 size="sm"
                 disabled={isLoading}
               >
-                <span>Sign in</span>
-                <span className="hidden text-white/70 sm:inline">with GitHub</span>
+                <span>{t("header.signIn")}</span>
+                <span className="hidden text-white/70 sm:inline">
+                  {locale === "zh-CN" ? "使用 GitHub" : "with GitHub"}
+                </span>
               </SignInButton>
             </>
           )}

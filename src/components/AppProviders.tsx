@@ -2,6 +2,7 @@ import { ConvexAuthProvider, useAuthActions } from "@convex-dev/auth/react";
 import { useEffect, useRef } from "react";
 import { convex } from "../convex/client";
 import { getUserFacingAuthError, normalizeAuthErrorMessage } from "../lib/authErrorMessage";
+import { I18nProvider } from "../lib/i18n";
 import { clearAuthError, setAuthError } from "../lib/useAuthError";
 import { UserBootstrap } from "./UserBootstrap";
 
@@ -82,10 +83,12 @@ export function AuthErrorHandler() {
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <ConvexAuthProvider client={convex} shouldHandleCode={false}>
-      <AuthCodeHandler />
-      <AuthErrorHandler />
-      <UserBootstrap />
-      {children}
+      <I18nProvider>
+        <AuthCodeHandler />
+        <AuthErrorHandler />
+        <UserBootstrap />
+        {children}
+      </I18nProvider>
     </ConvexAuthProvider>
   );
 }

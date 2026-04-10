@@ -24,12 +24,14 @@ import { Label } from "../components/ui/label";
 import { Separator } from "../components/ui/separator";
 import { Textarea } from "../components/ui/textarea";
 import { gravatarUrl } from "../lib/gravatar";
+import { useI18n } from "../lib/i18n";
 
 export const Route = createFileRoute("/settings")({
   component: Settings,
 });
 
 export function Settings() {
+  const { t, formatDateTime } = useI18n();
   const me = useQuery(api.users.me);
   const updateProfile = useMutation(api.users.updateProfile);
   const deleteAccount = useMutation(api.users.deleteAccount);
@@ -109,8 +111,8 @@ export function Settings() {
       <Container size="narrow" className="py-10">
         <Card>
           <CardContent className="flex flex-col items-start gap-3">
-            <span>Sign in to access settings.</span>
-            <SignInButton variant="outline">Sign in with GitHub</SignInButton>
+            <span>{t("settings.signInPrompt")}</span>
+            <SignInButton variant="outline">{t("settings.signInWithGitHub")}</SignInButton>
           </CardContent>
         </Card>
       </Container>
@@ -118,13 +120,13 @@ export function Settings() {
   }
 
   const avatar = me.image ?? (me.email ? gravatarUrl(me.email, 160) : undefined);
-  const identityName = me.displayName ?? me.name ?? me.handle ?? "Profile";
+  const identityName = me.displayName ?? me.name ?? me.handle ?? t("settings.userFallback");
   const handle = me.handle ?? (me.email ? me.email.split("@")[0] : undefined);
 
   async function onSave(event: React.FormEvent) {
     event.preventDefault();
     await updateProfile({ displayName, bio });
-    toast.success("Saved");
+    toast.success(t("settings.saved"));
   }
 
   async function onDelete() {
@@ -154,7 +156,7 @@ export function Settings() {
   return (
     <Container size="narrow" className="py-10">
       <main className="flex flex-col gap-6">
-        <h1 className="font-display text-2xl font-bold text-[color:var(--ink)]">Settings</h1>
+        <h1 className="font-display text-2xl font-bold text-[color:var(--ink)]">{t("settings.title")}</h1>
 
         {/* Profile card */}
         <Card>
@@ -182,7 +184,7 @@ export function Settings() {
           <form className="flex flex-col gap-4" onSubmit={onSave}>
             <CardContent>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="settings-display-name">Display name</Label>
+                <Label htmlFor="settings-display-name">{t("settings.displayName")}</Label>
                 <Input
                   id="settings-display-name"
                   value={displayName}
@@ -190,19 +192,19 @@ export function Settings() {
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="settings-bio">Bio</Label>
+                <Label htmlFor="settings-bio">{t("settings.bio")}</Label>
                 <Textarea
                   id="settings-bio"
                   rows={5}
                   value={bio}
                   onChange={(event) => setBio(event.target.value)}
-                  placeholder="Tell people what you're building."
+                  placeholder={t("settings.bioPlaceholder")}
                 />
               </div>
             </CardContent>
             <div className="flex items-center gap-3 px-[22px] pb-[22px]">
               <Button variant="primary" type="submit">
-                Save
+                {t("settings.save")}
               </Button>
             </div>
           </form>
@@ -211,14 +213,14 @@ export function Settings() {
         {/* Organizations */}
         <Card>
           <CardHeader>
-            <CardTitle>Organizations</CardTitle>
+            <CardTitle>{t("settings.organizations")}</CardTitle>
             <CardDescription>
-              Create org publishers and manage who can publish under them.
+              {t("settings.organizationsDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="settings-org-handle">Org handle</Label>
+              <Label htmlFor="settings-org-handle">{t("settings.orgHandle")}</Label>
               <Input
                 id="settings-org-handle"
                 value={orgHandle}
@@ -227,7 +229,7 @@ export function Settings() {
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="settings-org-display-name">Display name</Label>
+              <Label htmlFor="settings-org-display-name">{t("settings.orgDisplayName")}</Label>
               <Input
                 id="settings-org-display-name"
                 value={orgDisplayName}
@@ -242,7 +244,7 @@ export function Settings() {
                 disabled={!orgHandle.trim()}
                 onClick={() => void onCreateOrg()}
               >
-                Create org
+                {t("settings.createOrg")}
               </Button>
             </div>
 
@@ -251,7 +253,7 @@ export function Settings() {
                 <Separator className="my-2" />
 
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="settings-manage-org">Manage org</Label>
+                  <Label htmlFor="settings-manage-org">{t("settings.manageOrg")}</Label>
                   <select
                     id="settings-manage-org"
                     className="w-full min-h-[44px] rounded-[var(--radius-sm)] border border-[rgba(29,59,78,0.22)] bg-[rgba(255,255,255,0.94)] px-3.5 py-[13px] text-[color:var(--ink)] transition-all duration-[180ms] ease-out focus:outline-none focus:border-[color-mix(in_srgb,var(--accent)_70%,white)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_22%,transparent)] dark:border-[rgba(255,255,255,0.12)] dark:bg-[rgba(14,28,37,0.84)]"
@@ -269,7 +271,7 @@ export function Settings() {
                 {selectedOrg && selectedOrg.role !== "publisher" ? (
                   <>
                     <div className="flex flex-col gap-2">
-                      <Label htmlFor="settings-add-member">Add member</Label>
+                      <Label htmlFor="settings-add-member">{t("settings.addMember")}</Label>
                       <Input
                         id="settings-add-member"
                         value={memberHandle}
@@ -278,7 +280,7 @@ export function Settings() {
                       />
                     </div>
                     <div className="flex flex-col gap-2">
-                      <Label htmlFor="settings-member-role">Role</Label>
+                      <Label htmlFor="settings-member-role">{t("settings.role")}</Label>
                       <select
                         id="settings-member-role"
                         className="w-full min-h-[44px] rounded-[var(--radius-sm)] border border-[rgba(29,59,78,0.22)] bg-[rgba(255,255,255,0.94)] px-3.5 py-[13px] text-[color:var(--ink)] transition-all duration-[180ms] ease-out focus:outline-none focus:border-[color-mix(in_srgb,var(--accent)_70%,white)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_22%,transparent)] dark:border-[rgba(255,255,255,0.12)] dark:bg-[rgba(14,28,37,0.84)]"
@@ -302,7 +304,7 @@ export function Settings() {
                           }).then(() => setMemberHandle(""))
                         }
                       >
-                        Add member
+                        {t("settings.addMemberAction")}
                       </Button>
                     </div>
                   </>
@@ -335,7 +337,7 @@ export function Settings() {
                               })
                             }
                           >
-                            Remove
+                            {t("settings.remove")}
                           </Button>
                         ) : null}
                       </div>
@@ -350,14 +352,14 @@ export function Settings() {
         {/* API tokens */}
         <Card>
           <CardHeader>
-            <CardTitle>API tokens</CardTitle>
+            <CardTitle>{t("settings.apiTokens")}</CardTitle>
             <CardDescription>
-              Use these tokens for the `clawhub` CLI. Tokens are shown once on creation.
+              {t("settings.apiTokensDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="settings-token-label">Label</Label>
+              <Label htmlFor="settings-token-label">{t("settings.label")}</Label>
               <Input
                 id="settings-token-label"
                 value={tokenLabel}
@@ -367,12 +369,12 @@ export function Settings() {
             </div>
             <div className="flex flex-col items-start gap-3">
               <Button variant="primary" type="button" onClick={() => void onCreateToken()}>
-                Create token
+                {t("settings.createToken")}
               </Button>
               {newToken ? (
                 <div className="w-full rounded-[var(--radius-sm)] border border-[color:var(--line)] bg-[color:var(--surface-muted)] p-4">
                   <div className="mb-2 text-sm font-semibold text-[color:var(--ink)]">
-                    Copy this token now:
+                    {t("settings.copyTokenNow")}
                   </div>
                   <code className="block break-all text-sm text-[color:var(--ink-soft)]">
                     {newToken}
@@ -394,12 +396,16 @@ export function Settings() {
                         <span className="text-sm text-[color:var(--ink-soft)]">
                           ({token.prefix}...)
                         </span>
-                        {token.revokedAt ? <Badge variant="destructive">Revoked</Badge> : null}
+                        {token.revokedAt ? <Badge variant="destructive">{t("settings.revoked")}</Badge> : null}
                       </div>
                       <span className="text-sm text-[color:var(--ink-soft)]">
-                        Created {formatDate(token.createdAt)}
-                        {token.lastUsedAt ? ` · Used ${formatDate(token.lastUsedAt)}` : ""}
-                        {token.revokedAt ? ` · Revoked ${formatDate(token.revokedAt)}` : ""}
+                        {t("settings.created", { date: formatDateTime(token.createdAt) })}
+                        {token.lastUsedAt
+                          ? ` · ${t("settings.used", { date: formatDateTime(token.lastUsedAt) })}`
+                          : ""}
+                        {token.revokedAt
+                          ? ` · ${t("settings.revokedAt", { date: formatDateTime(token.revokedAt) })}`
+                          : ""}
                       </span>
                     </div>
                     <Button
@@ -409,13 +415,13 @@ export function Settings() {
                       disabled={Boolean(token.revokedAt)}
                       onClick={() => void revokeToken({ tokenId: token._id })}
                     >
-                      {token.revokedAt ? "Revoked" : "Revoke"}
+                      {token.revokedAt ? t("settings.revoked") : t("settings.revoke")}
                     </Button>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="mt-2 text-sm text-[color:var(--ink-soft)]">No tokens yet.</p>
+              <p className="mt-2 text-sm text-[color:var(--ink-soft)]">{t("settings.noTokens")}</p>
             )}
           </CardContent>
         </Card>
@@ -423,33 +429,31 @@ export function Settings() {
         {/* Danger zone */}
         <Card className="border-red-300/40 dark:border-red-500/30">
           <CardHeader>
-            <CardTitle className="text-red-700 dark:text-red-300">Danger zone</CardTitle>
+            <CardTitle className="text-red-700 dark:text-red-300">{t("settings.dangerZone")}</CardTitle>
             <CardDescription>
-              Delete your account permanently. This cannot be undone. Published skills remain
-              public.
+              {t("settings.dangerZoneDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="destructive" type="button">
-                  Delete account
+                  {t("settings.deleteAccount")}
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Delete account</DialogTitle>
+                  <DialogTitle>{t("settings.deleteAccountTitle")}</DialogTitle>
                   <DialogDescription>
-                    Delete your account permanently? This cannot be undone. Published skills will
-                    remain public.
+                    {t("settings.deleteAccountDescription")}
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
                   <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)}>
-                    Cancel
+                    {t("settings.cancel")}
                   </Button>
                   <Button variant="destructive" onClick={() => void onDelete()}>
-                    Delete account
+                    {t("settings.deleteAccount")}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -459,12 +463,4 @@ export function Settings() {
       </main>
     </Container>
   );
-}
-
-function formatDate(value: number) {
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return String(value);
-  }
 }
