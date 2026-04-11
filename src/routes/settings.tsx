@@ -135,7 +135,7 @@ export function Settings() {
   }
 
   async function onCreateToken() {
-    const label = tokenLabel.trim() || "CLI token";
+    const label = tokenLabel.trim() || t("cliAuth.tokenLabel");
     const result = await createToken({ label });
     setNewToken(result.token);
   }
@@ -225,7 +225,7 @@ export function Settings() {
                 id="settings-org-handle"
                 value={orgHandle}
                 onChange={(event) => setOrgHandle(event.target.value)}
-                placeholder="openclaw"
+                placeholder={t("settings.orgHandlePlaceholder")}
               />
             </div>
             <div className="flex flex-col gap-2">
@@ -234,7 +234,7 @@ export function Settings() {
                 id="settings-org-display-name"
                 value={orgDisplayName}
                 onChange={(event) => setOrgDisplayName(event.target.value)}
-                placeholder="OpenClaw"
+                placeholder={t("settings.orgDisplayNamePlaceholder")}
               />
             </div>
             <div className="flex items-center gap-3">
@@ -262,7 +262,7 @@ export function Settings() {
                   >
                     {orgs.map((entry) => (
                       <option key={entry.publisher._id} value={entry.publisher.handle}>
-                        @{entry.publisher.handle} · {entry.role}
+                        @{entry.publisher.handle} · {t(`settings.roles.${entry.role}`)}
                       </option>
                     ))}
                   </select>
@@ -276,7 +276,7 @@ export function Settings() {
                         id="settings-add-member"
                         value={memberHandle}
                         onChange={(event) => setMemberHandle(event.target.value)}
-                        placeholder="@username"
+                        placeholder={t("settings.memberHandlePlaceholder")}
                       />
                     </div>
                     <div className="flex flex-col gap-2">
@@ -287,9 +287,9 @@ export function Settings() {
                         value={memberRole}
                         onChange={(event) => setMemberRole(event.target.value as typeof memberRole)}
                       >
-                        <option value="publisher">Publisher</option>
-                        <option value="admin">Admin</option>
-                        <option value="owner">Owner</option>
+                        <option value="publisher">{t("settings.roles.publisher")}</option>
+                        <option value="admin">{t("settings.roles.admin")}</option>
+                        <option value="owner">{t("settings.roles.owner")}</option>
                       </select>
                     </div>
                     <div className="flex items-center gap-3">
@@ -322,7 +322,7 @@ export function Settings() {
                             {entry.user.displayName ?? entry.user.handle ?? entry.user._id}
                           </span>
                           <span className="text-sm text-[color:var(--ink-soft)]">
-                            @{entry.user.handle ?? "user"} · {entry.role}
+                            @{entry.user.handle ?? "user"} · {t(`settings.roles.${entry.role}`)}
                           </span>
                         </div>
                         {selectedOrg && selectedOrg.role !== "publisher" ? (
@@ -364,7 +364,7 @@ export function Settings() {
                 id="settings-token-label"
                 value={tokenLabel}
                 onChange={(event) => setTokenLabel(event.target.value)}
-                placeholder="CLI token"
+                placeholder={t("cliAuth.tokenLabel")}
               />
             </div>
             <div className="flex flex-col items-start gap-3">

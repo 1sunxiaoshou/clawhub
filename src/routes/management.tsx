@@ -24,6 +24,7 @@ import {
 import { getUserFacingConvexError } from "../lib/convexError";
 import { isAdmin, isModerator } from "../lib/roles";
 import { useAuthStatus } from "../lib/useAuthStatus";
+import { useI18n } from "../lib/i18n";
 
 const SKILL_CAPABILITY_LABELS: Record<string, string> = {
   crypto: "Crypto / DeFi",
@@ -124,6 +125,7 @@ export const Route = createFileRoute("/management")({
 
 function Management() {
   const { me } = useAuthStatus();
+  const { t, formatDateTime, locale } = useI18n();
   const search = Route.useSearch();
   const staff = isModerator(me);
   const admin = isAdmin(me);
@@ -214,7 +216,7 @@ function Management() {
       <main className="py-10">
         <Container size="wide">
           <Card>
-            <CardContent>Management only.</CardContent>
+            <CardContent>{t("management.title")} staff only.</CardContent>
           </Card>
         </Container>
       </main>
@@ -261,22 +263,28 @@ function Management() {
     : reportedSkills;
   const reportCountLabel =
     filteredReportedSkills.length === 0 && reportedSkills.length > 0
-      ? "No matching reports."
-      : "No reports yet.";
-  const reportSummary = `Showing ${filteredReportedSkills.length} of ${reportedSkills.length}`;
+      ? t("management.noMatchingReports")
+      : t("management.noReportsYet");
+  const reportSummary = t("management.showingOf", {
+    count: filteredReportedSkills.length.toLocaleString(locale),
+    total: reportedSkills.length.toLocaleString(locale),
+  });
 
   const filteredUsers = userResult?.items ?? [];
   const userTotal = userResult?.total ?? 0;
   const userSummary = userResult
-    ? `Showing ${filteredUsers.length} of ${userTotal}`
-    : "Loading users…";
+    ? t("management.showingOf", {
+        count: filteredUsers.length.toLocaleString(locale),
+        total: userTotal.toLocaleString(locale),
+      })
+    : t("common.loading");
   const userEmptyLabel = userResult
     ? filteredUsers.length === 0
       ? userQuery
-        ? "No matching users."
-        : "No users yet."
+        ? t("management.noMatchingReports")
+        : t("management.noReportsYet")
       : ""
-    : "Loading users…";
+    : t("common.loading");
 
   const applySkillOverride = () => {
     if (!selectedSkill?.skill) return;
@@ -302,14 +310,154 @@ function Management() {
       .catch((error) => toast.error(formatMutationError(error)));
   };
 
+  function formatTimestamp(value: number) {
+    return formatDateTime(value);
+  }
+
+  function formatMutationError(error: unknown) {
+    return getUserFacingConvexError(error, t("common.error"));
+  }
+
+  function formatManualOverrideState(
+    override:
+      | {
+          verdict: string;
+          note: string;
+          reviewerUserId: string;
+          updatedAt: number;
+        }
+      | null
+      | undefined,
+    reviewer?: ManagementUserSummary | null,
+  ) {
+    if (!override) return t("management.auditSummary.noOverride");
+    return `${formatVerdictLabel(override.verdict)} · ${t("management.auditSummary.reviewer")} ${formatManagementUserLabel(reviewer, override.reviewerUserId)} · ${t("management.auditSummary.updated")} ${formatTimestamp(
+      override.updatedAt,
+    )} · ${override.note}`;
+  }
+
+  function formatManagementUserLabel(
+    user: ManagementUserSummary | null | undefined,
+    fallbackId?: string | null,
+  ) {
+    if (user?.handle?.trim()) return `@${user.handle.trim()}`;
+    if (user?.displayName?.trim()) return user.displayName.trim();
+    if (user?.name?.trim()) return user.name.trim();
+    if (fallbackId?.trim()) return fallbackId.trim();
+    return t("management.auditSummary.unknownUser");
+  }
+
+  function formatAuditActionLabel(action: string, metadata?: unknown) {
+    const record = asAuditMetadataRecord(metadata);
+    if (action === "skill.manual_override.set") {
+      const verdict = typeof record?.verdict === "string" ? record.verdict : "unknown";
+      return t("management.auditSummary.overrideSetTo", { verdict: formatVerdictLabel(verdict) });
+    }
+    if (action === "skill.manual_override.clear") {
+      return t("management.auditSummary.overrideCleared");
+    }
+    if (action === "skill.owner.change") {
+      return t("management.auditSummary.ownerChanged");
+    }
+    if (action === "skill.duplicate.set") {
+      return t("management.auditSummary.duplicateSet");
+    }
+    if (action === "skill.duplicate.clear") {
+      return t("management.auditSummary.duplicateCleared");
+    }
+    if (action === "skill.auto_hide") {
+      return t("management.auditSummary.autoHidden");
+    }
+    if (action === "skill.hard_delete") {
+      return t("management.auditSummary.hardDeleted");
+    }
+    if (action.startsWith("skill.transfer.")) {
+      return t("management.auditSummary.transfer", {
+        action: action.slice("skill.transfer.".length).replaceAll("_", " "),
+      });
+    }
+    if (action.startsWith("skill.")) {
+      return action.slice("skill.".length).replaceAll(".", " ").replaceAll("_", " ");
+    }
+    return action.replaceAll(".", " ").replaceAll("_", " ");
+  }
+
+  function formatAuditMetadataSummary(action: string, metadata?: unknown) {
+    const record = asAuditMetadataRecord(metadata);
+    if (!record) return null;
+
+    if (action === "skill.manual_override.set") {
+      const note = typeof record.note === "string" ? record.note.trim() : "";
+      if (note) return note;
+      const previousVerdict = typeof record.previousVerdict === "string" ? record.previousVerdict : null;
+      return previousVerdict
+        ? t("management.auditSummary.previousVerdict", { verdict: formatVerdictLabel(previousVerdict) })
+        : null;
+    }
+
+    if (action === "skill.manual_override.clear") {
+      const note = typeof record.note === "string" ? record.note.trim() : "";
+      if (note) return note;
+      const previousVerdict = typeof record.previousVerdict === "string" ? record.previousVerdict : null;
+      return previousVerdict
+        ? t("management.auditSummary.previousOverrideVerdict", { verdict: formatVerdictLabel(previousVerdict) })
+        : null;
+    }
+
+    if (action === "skill.owner.change") {
+      const from = typeof record.from === "string" ? record.from : null;
+      const to = typeof record.to === "string" ? record.to : null;
+      if (from || to) {
+        return t("management.auditSummary.fromTo", {
+          from: from ?? t("management.auditSummary.unknownUser"),
+          to: to ?? t("management.auditSummary.unknownUser"),
+        });
+      }
+    }
+
+    if (action === "skill.duplicate.set") {
+      return typeof record.canonicalSlug === "string"
+        ? t("management.auditSummary.canonicalSkill", { slug: record.canonicalSlug })
+        : null;
+    }
+
+    if (action === "skill.duplicate.clear") {
+      return t("management.auditSummary.canonicalCleared");
+    }
+
+    if (action === "skill.auto_hide") {
+      return typeof record.reportCount === "number"
+        ? t("management.auditSummary.activeReportsCount", { count: record.reportCount })
+        : null;
+    }
+
+    if (action === "skill.hard_delete") {
+      return typeof record.slug === "string"
+        ? t("management.auditSummary.deletedSlug", { slug: record.slug })
+        : null;
+    }
+
+    if (typeof record.note === "string" && record.note.trim()) {
+      return record.note.trim();
+    }
+    if (typeof record.reason === "string" && record.reason.trim()) {
+      return record.reason.trim();
+    }
+    return null;
+  }
+
+  function formatVerdictLabel(verdict: string) {
+    return verdict === "clean" ? t("management.auditSummary.okay") : verdict;
+  }
+
   return (
     <main className="py-10">
       <Container size="wide">
         <h1 className="font-display text-2xl font-bold text-[color:var(--ink)]">
-          Management console
+          {t("management.title")}
         </h1>
         <p className="text-sm text-[color:var(--ink-soft)]">
-          Moderation, curation, and ownership tools.
+          {t("management.description")}
         </p>
 
         <Separator className="my-6" />
@@ -317,15 +465,15 @@ function Management() {
         {/* Reported skills */}
         <Card>
           <CardHeader>
-            <CardTitle>Reported skills</CardTitle>
+            <CardTitle>{t("management.reportedSkills")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-3 py-3">
               <div className="flex items-center gap-2">
-                <span className="font-mono text-xs">Filter</span>
+                <span className="font-mono text-xs">{t("management.filter")}</span>
                 <Input
                   type="search"
-                  placeholder="Search reported skills"
+                  placeholder={t("management.searchReported")}
                   value={reportSearch}
                   onChange={(event) => setReportSearch(event.target.value)}
                 />
@@ -356,10 +504,10 @@ function Management() {
                         </Link>
                         <div className="text-sm text-[color:var(--ink-soft)]">
                           @{owner?.handle ?? owner?.name ?? "user"} · v
-                          {latestVersion?.version ?? "—"} ·{skill.reportCount ?? 0} report
-                          {(skill.reportCount ?? 0) === 1 ? "" : "s"}
+                          {latestVersion?.version ?? "—"} ·{" "}
+                          {t("skills.count", { count: skill.reportCount ?? 0 })}
                           {skill.lastReportedAt
-                            ? ` · last ${formatTimestamp(skill.lastReportedAt)}`
+                            ? ` · ${t("management.auditSummary.updated")} ${formatTimestamp(skill.lastReportedAt)}`
                             : ""}
                         </div>
                         {reportEntries.length > 0 ? (
@@ -379,21 +527,23 @@ function Management() {
                           </div>
                         ) : (
                           <div className="text-sm text-[color:var(--ink-soft)]">
-                            No report reasons yet.
+                            {t("management.noReportsYet")}
                           </div>
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <Button asChild variant="outline" size="sm">
+                                <Button asChild variant="outline" size="sm">
                           <Link to="/management" search={{ skill: skill.slug }}>
-                            Manage
+                            {t("management.manage")}
                           </Link>
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            const action = skill.softDeletedAt ? "Restore" : "Hide";
+                            const action = skill.softDeletedAt
+                              ? t("management.restore")
+                              : t("management.hide");
                             const reason = window.prompt(
                               `${action} reason for "${skill.displayName}"`,
                             );
@@ -405,7 +555,7 @@ function Management() {
                             }).catch((error) => toast.error(formatMutationError(error)));
                           }}
                         >
-                          {skill.softDeletedAt ? "Restore" : "Hide"}
+                          {skill.softDeletedAt ? t("management.restore") : t("management.hide")}
                         </Button>
                         {admin ? (
                           <Button
@@ -416,7 +566,7 @@ function Management() {
                               void hardDelete({ skillId: skill._id });
                             }}
                           >
-                            Hard delete
+                            {t("management.hardDelete")}
                           </Button>
                         ) : null}
                       </div>
@@ -433,12 +583,12 @@ function Management() {
         {/* Skill tools */}
         <Card>
           <CardHeader>
-            <CardTitle>Skill tools</CardTitle>
+            <CardTitle>{t("management.skillTools")}</CardTitle>
             {selectedSlug ? (
               <p className="text-sm text-[color:var(--ink-soft)]">
-                Managing &ldquo;{selectedSlug}&rdquo; &middot;{" "}
+                {t("management.manage")} &ldquo;{selectedSlug}&rdquo; &middot;{" "}
                 <Link to="/management" search={{ skill: undefined }}>
-                  Clear selection
+                  {t("management.clearSelection")}
                 </Link>
               </p>
             ) : null}
@@ -448,8 +598,8 @@ function Management() {
               {!selectedSlug ? (
                 <EmptyState
                   icon={Shield}
-                  title="No skill selected"
-                  description="Use the Manage button on a skill to open tooling here."
+                  title={t("management.noSkillSelected")}
+                  description={t("management.noSkillSelectedDesc")}
                 />
               ) : selectedSkill === undefined ? (
                 <div className="flex flex-col gap-3">
@@ -458,7 +608,10 @@ function Management() {
                   <Skeleton className="h-32 w-full" />
                 </div>
               ) : !selectedSkill?.skill ? (
-                <EmptyState icon={Shield} title={`No skill found for "${selectedSlug}"`} />
+                <EmptyState
+                  icon={Shield}
+                  title={t("management.noSkillFound", { slug: selectedSlug })}
+                />
               ) : (
                 (() => {
                   const { skill, latestVersion, owner, canonical, overrideReviewer, auditLogs } =
@@ -492,7 +645,7 @@ function Management() {
                         </Link>
                         <div className="text-sm text-[color:var(--ink-soft)]">
                           @{owner?.handle ?? owner?.name ?? "user"} · v
-                          {latestVersion?.version ?? "—"} · updated{" "}
+                          {latestVersion?.version ?? "—"} · {t("management.auditSummary.updated")}{" "}
                           {formatTimestamp(skill.updatedAt)} · {moderationStatus}
                           {badges.length ? ` · ${badges.join(", ").toLowerCase()}` : ""}
                         </div>
@@ -505,7 +658,7 @@ function Management() {
                         ) : null}
                         <div className="flex flex-col gap-2 border-l-2 border-[color:var(--line)] pl-4">
                           <div className="text-sm text-[color:var(--ink-soft)]">
-                            Capability tags
+                            {t("management.capabilityTags")}
                           </div>
                           <div className="flex flex-wrap gap-3">
                             {SKILL_CAPABILITY_TAGS.map((tag) => (
@@ -517,20 +670,20 @@ function Management() {
                                     toggleSkillCapabilityTag(tag, event.target.checked)
                                   }
                                 />
-                                <span>{SKILL_CAPABILITY_LABELS[tag] ?? tag}</span>
+                                <span>{t(`skills.capabilities.${tag}`) || SKILL_CAPABILITY_LABELS[tag] || tag}</span>
                               </label>
                             ))}
                           </div>
                         </div>
                         <div className="flex flex-col gap-2 border-l-2 border-[color:var(--line)] pl-4">
                           <div className="text-sm text-[color:var(--ink-soft)]">
-                            Manual overrides
+                            {t("management.manualOverrides")}
                           </div>
                           <Card>
                             <CardContent>
                               <div className="flex flex-col gap-1">
                                 <span className="text-xs font-medium text-[color:var(--ink-soft)]">
-                                  Current override
+                                  {t("management.currentOverride")}
                                 </span>
                                 <span>
                                   {formatManualOverrideState(
@@ -541,26 +694,26 @@ function Management() {
                               </div>
                               <div className="flex flex-col gap-1">
                                 <span className="text-xs font-medium text-[color:var(--ink-soft)]">
-                                  Latest version
+                                  {t("management.latestVersion")}
                                 </span>
                                 <span>
                                   {latestVersion
                                     ? `v${latestVersion.version}`
-                                    : "No published version."}
+                                    : t("dashboard.noSkillsTitle")}
                                 </span>
                               </div>
                               <div className="flex flex-col gap-1">
                                 <span className="text-xs font-medium text-[color:var(--ink-soft)]">
-                                  Behavior
+                                  {t("management.behavior")}
                                 </span>
-                                <span>Applies to the full skill until a moderator clears it.</span>
+                                <span>{t("management.behaviorDesc")}</span>
                               </div>
                               <Textarea
                                 rows={4}
                                 placeholder={
                                   skill.manualOverride
-                                    ? "Audit note required to update or clear the okay override"
-                                    : "Audit note required to mark this skill okay"
+                                    ? t("management.overrideNoteRequiredUpdate")
+                                    : t("management.overrideNoteRequiredMark")
                                 }
                                 value={skillOverrideNote}
                                 onChange={(event) => setSkillOverrideNote(event.target.value)}
@@ -573,8 +726,8 @@ function Management() {
                                   onClick={applySkillOverride}
                                 >
                                   {skill.manualOverride
-                                    ? "Update okay override"
-                                    : "Mark skill okay"}
+                                    ? t("management.updateOkayOverride")
+                                    : t("management.markSkillOkay")}
                                 </Button>
                                 {skill.manualOverride ? (
                                   <Button
@@ -583,7 +736,7 @@ function Management() {
                                     disabled={!skillOverrideNote.trim()}
                                     onClick={clearSkillOverride}
                                   >
-                                    Clear skill override
+                                    {t("management.clearSkillOverride")}
                                   </Button>
                                 ) : null}
                               </div>
@@ -592,19 +745,19 @@ function Management() {
                         </div>
                         <div className="flex flex-col gap-2 border-l-2 border-[color:var(--line)] pl-4">
                           <div className="text-sm text-[color:var(--ink-soft)]">
-                            Recent audit activity
+                            {t("management.recentAuditActivity")}
                           </div>
                           <Card>
                             <CardContent>
                               <div className="flex flex-col gap-1">
                                 <span className="text-xs font-medium text-[color:var(--ink-soft)]">
-                                  Window
+                                  {t("management.recentAuditActivity")}
                                 </span>
-                                <span>Last {SKILL_AUDIT_LOG_LIMIT} entries for this skill.</span>
+                                <span>{t("management.windowDesc", { limit: SKILL_AUDIT_LOG_LIMIT })}</span>
                               </div>
                               {auditLogs.length === 0 ? (
                                 <div className="text-sm text-[color:var(--ink-soft)]">
-                                  No audit activity yet.
+                                  {t("management.noAuditActivity")}
                                 </div>
                               ) : (
                                 <div className="flex flex-col gap-3">
@@ -634,7 +787,7 @@ function Management() {
                                         ) : null}
                                         {entry.metadata ? (
                                           <details className="text-xs">
-                                            <summary>metadata</summary>
+                                            <summary>{t("management.metadata")}</summary>
                                             <pre className="mt-1 overflow-x-auto rounded bg-[color:var(--surface-muted)] p-3 font-mono text-xs">
                                               {JSON.stringify(entry.metadata, null, 2)}
                                             </pre>
@@ -650,15 +803,15 @@ function Management() {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <label className="flex flex-col gap-2">
-                            <span className="font-mono text-xs">duplicate of</span>
+                            <span className="font-mono text-xs">{t("management.duplicateOf")}</span>
                             <Input
                               value={selectedDuplicate}
                               onChange={(event) => setSelectedDuplicate(event.target.value)}
-                              placeholder={canonical?.skill?.slug ?? "canonical slug"}
+                              placeholder={canonical?.skill?.slug ?? t("management.canonicalSlug")}
                             />
                           </label>
                           <div className="flex flex-col gap-2">
-                            <span className="font-mono text-xs">duplicate action</span>
+                            <span className="font-mono text-xs">{t("management.duplicateOf")} action</span>
                             <Button
                               variant="outline"
                               size="sm"
@@ -669,13 +822,13 @@ function Management() {
                                 })
                               }
                             >
-                              Set duplicate
+                              {t("management.setDuplicate")}
                             </Button>
                           </div>
                           {admin ? (
                             <>
                               <label className="flex flex-col gap-2">
-                                <span className="font-mono text-xs">owner</span>
+                                <span className="font-mono text-xs">{t("management.owner")}</span>
                                 <select
                                   className="w-full min-h-[44px] rounded-[var(--radius-sm)] border border-[rgba(29,59,78,0.22)] bg-[rgba(255,255,255,0.94)] px-3.5 py-[13px] text-[color:var(--ink)] transition-all duration-[180ms] ease-out dark:border-[rgba(255,255,255,0.12)] dark:bg-[rgba(14,28,37,0.84)]"
                                   value={selectedOwner}
@@ -683,13 +836,13 @@ function Management() {
                                 >
                                   {filteredUsers.map((user) => (
                                     <option key={user._id} value={user._id}>
-                                      @{user.handle ?? user.name ?? "user"}
+                                      @{user.handle ?? user.name ?? t("common.user")}
                                     </option>
                                   ))}
                                 </select>
                               </label>
                               <div className="flex flex-col gap-2">
-                                <span className="font-mono text-xs">owner action</span>
+                                <span className="font-mono text-xs">{t("management.owner")} action</span>
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -700,7 +853,7 @@ function Management() {
                                     })
                                   }
                                 >
-                                  Change owner
+                                  {t("management.changeOwner")}
                                 </Button>
                               </div>
                             </>
@@ -710,14 +863,14 @@ function Management() {
                       <div className="flex flex-wrap gap-2">
                         <Button asChild variant="outline" size="sm">
                           <Link to="/$owner/$slug" params={{ owner: ownerParam, slug: skill.slug }}>
-                            View
+                            {t("management.view")}
                           </Link>
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            const action = skill.softDeletedAt ? "Restore" : "Hide";
+                            const action = skill.softDeletedAt ? t("management.restore") : t("management.hide");
                             const reason = window.prompt(
                               `${action} reason for "${skill.displayName}"`,
                             );
@@ -729,7 +882,7 @@ function Management() {
                             }).catch((error) => toast.error(formatMutationError(error)));
                           }}
                         >
-                          {skill.softDeletedAt ? "Restore" : "Hide"}
+                          {skill.softDeletedAt ? t("management.restore") : t("management.hide")}
                         </Button>
                         <Button
                           variant="outline"
@@ -741,7 +894,7 @@ function Management() {
                             })
                           }
                         >
-                          {isHighlighted ? "Unhighlight" : "Highlight"}
+                          {isHighlighted ? t("management.unhighlight") : t("management.highlight")}
                         </Button>
                         {admin ? (
                           <Button
@@ -752,7 +905,7 @@ function Management() {
                               void hardDelete({ skillId: skill._id });
                             }}
                           >
-                            Hard delete
+                            {t("management.hardDelete")}
                           </Button>
                         ) : null}
                         {staff ? (
@@ -770,7 +923,7 @@ function Management() {
                               void banUser({ userId: ownerUserId, reason });
                             }}
                           >
-                            Ban user
+                            {t("management.banUser")}
                           </Button>
                         ) : null}
                         {admin ? (
@@ -785,7 +938,7 @@ function Management() {
                                 })
                               }
                             >
-                              {isOfficial ? "Remove official" : "Mark official"}
+                              {isOfficial ? t("management.removeOfficial") : t("management.markOfficial")}
                             </Button>
                             <Button
                               variant="outline"
@@ -797,7 +950,7 @@ function Management() {
                                 })
                               }
                             >
-                              {isDeprecated ? "Remove deprecated" : "Mark deprecated"}
+                              {isDeprecated ? t("management.removeDeprecated") : t("management.markDeprecated")}
                             </Button>
                           </>
                         ) : null}
@@ -815,12 +968,12 @@ function Management() {
         {/* Duplicate candidates */}
         <Card>
           <CardHeader>
-            <CardTitle>Duplicate candidates</CardTitle>
+            <CardTitle>{t("management.duplicateCandidates")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-3">
               {duplicateCandidates.length === 0 ? (
-                <EmptyState icon={Copy} title="No duplicate candidates" />
+                <EmptyState icon={Copy} title={t("management.noDuplicateCandidates")} />
               ) : (
                 duplicateCandidates.map((entry) => (
                   <div
@@ -870,7 +1023,7 @@ function Management() {
                                     slug: match.skill.slug,
                                   }}
                                 >
-                                  View
+                                  {t("management.view")}
                                 </Link>
                               </Button>
                               <Button
@@ -883,7 +1036,7 @@ function Management() {
                                   })
                                 }
                               >
-                                Mark duplicate
+                                {t("management.setDuplicate")}
                               </Button>
                             </div>
                           </div>
@@ -902,7 +1055,7 @@ function Management() {
                             slug: entry.skill.slug,
                           }}
                         >
-                          View
+                          {t("management.view")}
                         </Link>
                       </Button>
                     </div>
@@ -918,12 +1071,12 @@ function Management() {
         {/* Recent pushes */}
         <Card>
           <CardHeader>
-            <CardTitle>Recent pushes</CardTitle>
+            <CardTitle>{t("management.recentPushes")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-3">
               {recentVersions.length === 0 ? (
-                <EmptyState icon={History} title="No recent versions" />
+                <EmptyState icon={History} title={t("management.noRecentVersions")} />
               ) : (
                 recentVersions.map((entry) => (
                   <div
@@ -931,17 +1084,17 @@ function Management() {
                     className="flex items-start justify-between gap-4 rounded-[var(--radius-md)] border border-[color:var(--line)] bg-[color:var(--surface)] p-4"
                   >
                     <div className="flex flex-1 flex-col gap-2">
-                      <strong>{entry.skill?.displayName ?? "Unknown skill"}</strong>
+                      <strong>{entry.skill?.displayName ?? t("management.unknownSkill")}</strong>
                       <div className="text-sm text-[color:var(--ink-soft)]">
                         v{entry.version.version} · @
-                        {entry.owner?.handle ?? entry.owner?.name ?? "user"}
+                        {entry.owner?.handle ?? entry.owner?.name ?? t("settings.userFallback")}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       {entry.skill ? (
                         <Button asChild variant="outline" size="sm">
                           <Link to="/management" search={{ skill: entry.skill.slug }}>
-                            Manage
+                            {t("management.manage")}
                           </Link>
                         </Button>
                       ) : null}
@@ -957,7 +1110,7 @@ function Management() {
                               slug: entry.skill.slug,
                             }}
                           >
-                            View
+                            {t("management.view")}
                           </Link>
                         </Button>
                       ) : null}
@@ -976,15 +1129,15 @@ function Management() {
             {/* Users */}
             <Card>
               <CardHeader>
-                <CardTitle>Users</CardTitle>
+                <CardTitle>{t("management.users")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-3 py-3">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs">Filter</span>
+                    <span className="font-mono text-xs">{t("management.filter")}</span>
                     <Input
                       type="search"
-                      placeholder="Search users"
+                      placeholder={t("management.searchUsers")}
                       value={userSearch}
                       onChange={(event) => setUserSearch(event.target.value)}
                     />
@@ -995,7 +1148,7 @@ function Management() {
                 </div>
                 <div className="flex flex-col gap-3">
                   {filteredUsers.length === 0 ? (
-                    <EmptyState icon={Users} title={userEmptyLabel || "No users"} />
+                    <EmptyState icon={Users} title={userEmptyLabel || t("management.noUsers")} />
                   ) : (
                     filteredUsers.map((user) => (
                       <div
@@ -1087,136 +1240,7 @@ function Management() {
   );
 }
 
-function formatTimestamp(value: number) {
-  return new Date(value).toLocaleString();
-}
-
-function formatMutationError(error: unknown) {
-  return getUserFacingConvexError(error, "Request failed.");
-}
-
-function formatManualOverrideState(
-  override:
-    | {
-        verdict: string;
-        note: string;
-        reviewerUserId: string;
-        updatedAt: number;
-      }
-    | null
-    | undefined,
-  reviewer?: ManagementUserSummary | null,
-) {
-  if (!override) return "No override.";
-  return `${formatVerdictLabel(override.verdict)} · reviewer ${formatManagementUserLabel(reviewer, override.reviewerUserId)} · updated ${formatTimestamp(
-    override.updatedAt,
-  )} · ${override.note}`;
-}
-
-function formatManagementUserLabel(
-  user: ManagementUserSummary | null | undefined,
-  fallbackId?: string | null,
-) {
-  if (user?.handle?.trim()) return `@${user.handle.trim()}`;
-  if (user?.displayName?.trim()) return user.displayName.trim();
-  if (user?.name?.trim()) return user.name.trim();
-  if (fallbackId?.trim()) return fallbackId.trim();
-  return "unknown user";
-}
-
-function formatAuditActionLabel(action: string, metadata?: unknown) {
-  const record = asAuditMetadataRecord(metadata);
-  if (action === "skill.manual_override.set") {
-    const verdict = typeof record?.verdict === "string" ? record.verdict : "unknown";
-    return `Override set to ${formatVerdictLabel(verdict)}`;
-  }
-  if (action === "skill.manual_override.clear") {
-    return "Override cleared";
-  }
-  if (action === "skill.owner.change") {
-    return "Owner changed";
-  }
-  if (action === "skill.duplicate.set") {
-    return "Duplicate target set";
-  }
-  if (action === "skill.duplicate.clear") {
-    return "Duplicate target cleared";
-  }
-  if (action === "skill.auto_hide") {
-    return "Skill auto-hidden";
-  }
-  if (action === "skill.hard_delete") {
-    return "Skill hard-deleted";
-  }
-  if (action.startsWith("skill.transfer.")) {
-    return `Transfer ${action.slice("skill.transfer.".length).replaceAll("_", " ")}`;
-  }
-  if (action.startsWith("skill.")) {
-    return action.slice("skill.".length).replaceAll(".", " ").replaceAll("_", " ");
-  }
-  return action.replaceAll(".", " ").replaceAll("_", " ");
-}
-
-function formatAuditMetadataSummary(action: string, metadata?: unknown) {
-  const record = asAuditMetadataRecord(metadata);
-  if (!record) return null;
-
-  if (action === "skill.manual_override.set") {
-    const note = typeof record.note === "string" ? record.note.trim() : "";
-    if (note) return note;
-    const previousVerdict =
-      typeof record.previousVerdict === "string" ? record.previousVerdict : null;
-    return previousVerdict ? `Previous verdict: ${formatVerdictLabel(previousVerdict)}` : null;
-  }
-
-  if (action === "skill.manual_override.clear") {
-    const note = typeof record.note === "string" ? record.note.trim() : "";
-    if (note) return note;
-    const previousVerdict =
-      typeof record.previousVerdict === "string" ? record.previousVerdict : null;
-    return previousVerdict
-      ? `Previous override verdict: ${formatVerdictLabel(previousVerdict)}`
-      : null;
-  }
-
-  if (action === "skill.owner.change") {
-    const from = typeof record.from === "string" ? record.from : null;
-    const to = typeof record.to === "string" ? record.to : null;
-    if (from || to) return `from ${from ?? "unknown"} to ${to ?? "unknown"}`;
-  }
-
-  if (action === "skill.duplicate.set") {
-    return typeof record.canonicalSlug === "string"
-      ? `Canonical skill: ${record.canonicalSlug}`
-      : null;
-  }
-
-  if (action === "skill.duplicate.clear") {
-    return "Canonical skill cleared.";
-  }
-
-  if (action === "skill.auto_hide") {
-    return typeof record.reportCount === "number" ? `${record.reportCount} active reports` : null;
-  }
-
-  if (action === "skill.hard_delete") {
-    return typeof record.slug === "string" ? `Deleted slug: ${record.slug}` : null;
-  }
-
-  if (typeof record.note === "string" && record.note.trim()) {
-    return record.note.trim();
-  }
-  if (typeof record.reason === "string" && record.reason.trim()) {
-    return record.reason.trim();
-  }
-  return null;
-}
-
 function asAuditMetadataRecord(metadata: unknown) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
   return metadata as Record<string, unknown>;
-}
-
-function formatVerdictLabel(verdict: string) {
-  return verdict === "clean" ? "okay" : verdict;
 }

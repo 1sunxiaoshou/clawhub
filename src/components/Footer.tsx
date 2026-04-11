@@ -1,8 +1,11 @@
+import { useI18n } from "../lib/i18n";
 import { getSiteName } from "../lib/site";
 import { Separator } from "./ui/separator";
 
 export function Footer() {
   const siteName = getSiteName();
+  const { t } = useI18n();
+
   return (
     <footer className="mt-auto px-7 pb-8 pt-12">
       <div className="mx-auto max-w-[1200px]">
@@ -12,7 +15,9 @@ export function Footer() {
           <FooterLink href="https://openclaw.ai">OpenClaw</FooterLink>
           <FooterLink href="https://vercel.com">Vercel</FooterLink>
           <FooterLink href="https://www.convex.dev">Convex</FooterLink>
-          <FooterLink href="https://github.com/openclaw/clawhub">Open source (MIT)</FooterLink>
+          <FooterLink href="https://github.com/openclaw/clawhub">
+            {t("footer.opensource")} (MIT)
+          </FooterLink>
           <FooterLink href="https://steipete.me">Peter Steinberger</FooterLink>
         </div>
       </div>

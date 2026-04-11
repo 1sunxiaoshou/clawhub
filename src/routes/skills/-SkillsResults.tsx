@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import type { RefObject } from "react";
 import { EmptyState } from "../../components/EmptyState";
+import { useI18n } from "../../lib/i18n";
 import { SkillCardSkeletonGrid } from "../../components/skeletons/SkillCardSkeleton";
 import { SkillCard } from "../../components/SkillCard";
 import { getPlatformLabels } from "../../components/skillDetailUtils";
@@ -37,14 +38,16 @@ export function SkillsResults({
   loadMoreRef,
   loadMore,
 }: SkillsResultsProps) {
+  const { t } = useI18n();
+
   return (
     <>
       {isLoadingSkills ? (
         <SkillCardSkeletonGrid count={6} />
       ) : sorted.length === 0 ? (
         <EmptyState
-          title={listDoneLoading || hasQuery ? "No skills match that filter" : "Loading skills..."}
-          description={hasQuery ? "Try adjusting your search or filters." : undefined}
+          title={listDoneLoading || hasQuery ? t("skills.noMatch") : t("skills.loading")}
+          description={hasQuery ? t("skills.tryAdjusting") : undefined}
         />
       ) : view === "cards" ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-5">
@@ -61,15 +64,15 @@ export function SkillsResults({
                 skill={skill}
                 href={skillHref}
                 badge={getSkillBadges(skill)}
-                chip={isPlugin ? "Plugin bundle (nix)" : undefined}
+                chip={isPlugin ? t("skills.pluginChip") : undefined}
                 platformLabels={platforms.length ? platforms : undefined}
-                summaryFallback="Agent-ready skill pack."
+                summaryFallback={t("skills.fallbackSummary")}
                 meta={
                   <>
                     <UserBadge
                       user={entry.owner}
                       fallbackHandle={ownerHandle}
-                      prefix="by"
+                      prefix={t("common.by")}
                       link={false}
                     />
                     <span className="text-[0.8rem] text-[color:var(--ink-soft)]">
@@ -86,10 +89,10 @@ export function SkillsResults({
         <div className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--line)]">
           {/* Table header */}
           <div className="grid grid-cols-[minmax(160px,1.2fr)_minmax(120px,1.6fr)_minmax(100px,0.8fr)_minmax(120px,1fr)] gap-4 border-b border-[color:var(--line)] bg-[color:var(--surface-muted)] px-5 py-3 text-xs font-bold uppercase tracking-wider text-[color:var(--ink-soft)]">
-            <span>Skill</span>
-            <span>Summary</span>
-            <span>Author</span>
-            <span className="text-right">Stats</span>
+            <span>{t("skills.tableHeader.skill")}</span>
+            <span>{t("skills.tableHeader.summary")}</span>
+            <span>{t("skills.tableHeader.author")}</span>
+            <span className="text-right">{t("skills.tableHeader.stats")}</span>
           </div>
           {sorted.map((entry, i) => {
             const skill = entry.skill;
@@ -121,7 +124,7 @@ export function SkillsResults({
                   ) : null}
                 </span>
                 <span className="truncate text-sm text-[color:var(--ink-soft)]">
-                  {skill.summary ?? "No summary provided."}
+                  {skill.summary ?? t("skills.noSummary")}
                 </span>
                 <span className="text-sm">
                   <UserBadge
@@ -147,10 +150,10 @@ export function SkillsResults({
             isLoadingMore ? (
               <div className="flex items-center gap-2 text-sm font-medium text-[color:var(--ink-soft)]">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Loading more...
+                {t("skills.loadingMore")}
               </div>
             ) : (
-              <div className="text-sm text-[color:var(--ink-soft)]">Scroll to load more</div>
+              <div className="text-sm text-[color:var(--ink-soft)]">{t("skills.scrollToLoad")}</div>
             )
           ) : (
             <Button
@@ -159,7 +162,7 @@ export function SkillsResults({
               disabled={isLoadingMore}
               loading={isLoadingMore}
             >
-              Load more
+              {t("skills.loadMore")}
             </Button>
           )}
         </div>

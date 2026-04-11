@@ -18,6 +18,7 @@ import { Card } from "../../components/ui/card";
 import { Skeleton } from "../../components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { getSkillBadges } from "../../lib/badges";
+import { useI18n } from "../../lib/i18n";
 import type { PublicSkill, PublicUser } from "../../lib/publicUser";
 
 export const Route = createFileRoute("/u/$handle")({
@@ -36,6 +37,7 @@ function UserProfile() {
     api.stars.listByUser,
     user ? { userId: user._id, limit: 50 } : "skip",
   ) as PublicSkill[] | undefined;
+  const { t, formatDateTime } = useI18n();
 
   const isSelf = Boolean(me && user && me._id === user._id);
   const [tab, setTab] = useState<"stars" | "installed">("stars");
@@ -69,8 +71,8 @@ function UserProfile() {
         <Container size="narrow">
           <EmptyState
             icon={User}
-            title="User not found"
-            description="This user doesn't exist or their account has been removed."
+            title={t("profile.userNotFound")}
+            description={t("profile.userNotFoundDesc")}
           />
         </Container>
       </main>
@@ -108,8 +110,8 @@ function UserProfile() {
           {isSelf ? (
             <Tabs value={tab} onValueChange={(v) => setTab(v as "stars" | "installed")}>
               <TabsList>
-                <TabsTrigger value="stars">Stars</TabsTrigger>
-                <TabsTrigger value="installed">Installed</TabsTrigger>
+                <TabsTrigger value="stars">{t("profile.tabs.stars")}</TabsTrigger>
+                <TabsTrigger value="installed">{t("profile.tabs.installed")}</TabsTrigger>
               </TabsList>
               <TabsContent value="stars" className="mt-6">
                 <PublishedAndStarred
@@ -117,6 +119,7 @@ function UserProfile() {
                   isLoadingPublished={isLoadingPublished}
                   skills={skills}
                   isLoadingSkills={isLoadingSkills}
+                  t={t}
                 />
               </TabsContent>
               <TabsContent value="installed" className="mt-6">
@@ -124,6 +127,8 @@ function UserProfile() {
                   includeRemoved={includeRemoved}
                   onToggleRemoved={() => setIncludeRemoved((value) => !value)}
                   data={installed}
+                  t={t}
+                  formatDateTime={formatDateTime}
                 />
               </TabsContent>
             </Tabs>
@@ -133,6 +138,7 @@ function UserProfile() {
               isLoadingPublished={isLoadingPublished}
               skills={skills}
               isLoadingSkills={isLoadingSkills}
+              t={t}
             />
           )}
         </div>
@@ -146,19 +152,21 @@ function PublishedAndStarred({
   isLoadingPublished,
   skills,
   isLoadingSkills,
+  t,
 }: {
   published: PublicSkill[];
   isLoadingPublished: boolean;
   skills: PublicSkill[];
   isLoadingSkills: boolean;
+  t: (key: string) => string;
 }) {
   return (
     <div className="flex flex-col gap-8">
       {/* Published */}
       <section>
-        <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">Published</h2>
+        <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">{t("profile.published")}</h2>
         <p className="mt-1 mb-4 text-sm text-[color:var(--ink-soft)]">
-          Skills published by this user.
+          {t("profile.publishedDesc")}
         </p>
         {isLoadingPublished ? (
           <SkillCardSkeletonGrid count={3} />
@@ -169,7 +177,7 @@ function PublishedAndStarred({
                 key={skill._id}
                 skill={skill}
                 badge={getSkillBadges(skill)}
-                summaryFallback="Agent-ready skill pack."
+                summaryFallback={t("skills.fallbackSummary")}
                 meta={
                   <span className="text-[0.8rem] text-[color:var(--ink-soft)]">
                     <SkillStatsTripletLine stats={skill.stats} />
@@ -179,20 +187,20 @@ function PublishedAndStarred({
             ))}
           </div>
         ) : (
-          <p className="text-sm text-[color:var(--ink-soft)]">No published skills yet.</p>
+          <p className="text-sm text-[color:var(--ink-soft)]">{t("profile.noPublished")}</p>
         )}
       </section>
 
       {/* Stars */}
       <section>
-        <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">Stars</h2>
+        <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">{t("profile.stars")}</h2>
         <p className="mt-1 mb-4 text-sm text-[color:var(--ink-soft)]">
-          Skills this user has starred.
+          {t("profile.starsDesc")}
         </p>
         {isLoadingSkills ? (
           <SkillCardSkeletonGrid count={3} />
         ) : skills.length === 0 ? (
-          <EmptyState icon={Star} title="No stars yet" />
+          <EmptyState icon={Star} title={t("profile.noStars")} />
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-5">
             {skills.map((skill) => (
@@ -219,6 +227,8 @@ function InstalledSection(props: {
   includeRemoved: boolean;
   onToggleRemoved: () => void;
   data: TelemetryResponse | null | undefined;
+  t: (key: string, params?: any) => string;
+  formatDateTime: (date: number | Date) => string;
 }) {
   const clearTelemetry = useMutation(api.telemetry.clearMyTelemetry);
   const [showRaw, setShowRaw] = useState(false);
@@ -227,7 +237,7 @@ function InstalledSection(props: {
   if (data === undefined) {
     return (
       <div className="flex flex-col gap-4">
-        <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">Installed</h2>
+        <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">{props.t("profile.installed.title")}</h2>
         <SkillCardSkeletonGrid count={3} />
       </div>
     );
@@ -236,9 +246,9 @@ function InstalledSection(props: {
   if (data === null) {
     return (
       <div className="flex flex-col gap-4">
-        <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">Installed</h2>
-        <EmptyState title="Sign in to view your installed skills">
-          <SignInButton variant="outline">Sign in with GitHub</SignInButton>
+        <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">{props.t("profile.installed.title")}</h2>
+        <EmptyState title={props.t("profile.installed.signInPrompt")}>
+          <SignInButton variant="outline">{props.t("header.signInWithGitHub")}</SignInButton>
         </EmptyState>
       </div>
     );
@@ -246,31 +256,30 @@ function InstalledSection(props: {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">Installed</h2>
+      <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">{props.t("profile.installed.title")}</h2>
       <p className="max-w-2xl text-sm text-[color:var(--ink-soft)]">
-        Private view. Only you can see your folders/roots. Everyone else only sees aggregated
-        install counts per skill.
+        {props.t("profile.installed.privateNotice")}
       </p>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={props.onToggleRemoved}>
-          {props.includeRemoved ? "Hide removed" : "Show removed"}
+          {props.includeRemoved ? props.t("profile.installed.hideRemoved") : props.t("profile.installed.showRemoved")}
         </Button>
         <Button variant="outline" size="sm" onClick={() => setShowRaw((value) => !value)}>
-          {showRaw ? "Hide JSON" : "Show JSON"}
+          {showRaw ? props.t("profile.installed.hideJson") : props.t("profile.installed.showJson")}
         </Button>
         <Button
           variant="destructive"
           size="sm"
           onClick={() => {
-            toast("Delete all telemetry data?", {
+            toast(props.t("profile.installed.deleteConfirm"), {
               action: {
-                label: "Delete",
+                label: props.t("profile.installed.deleteAction"),
                 onClick: () => void clearTelemetry(),
               },
             });
           }}
         >
-          Delete telemetry
+          {props.t("profile.installed.deleteTelemetry")}
         </Button>
       </div>
 
@@ -284,8 +293,8 @@ function InstalledSection(props: {
 
       {data.roots.length === 0 ? (
         <EmptyState
-          title="No telemetry yet"
-          description='Run "clawhub sync" from the CLI to start tracking.'
+          title={props.t("profile.installed.noTelemetry")}
+          description={props.t("profile.installed.syncInstructions")}
         />
       ) : (
         <div className="grid gap-4">
@@ -297,15 +306,15 @@ function InstalledSection(props: {
                     {root.label}
                   </h3>
                   <p className="text-xs text-[color:var(--ink-soft)]">
-                    Last sync {new Date(root.lastSeenAt).toLocaleString()}
-                    {root.expiredAt ? " · stale" : ""}
+                    {props.t("profile.installed.lastSync", { date: props.formatDateTime(root.lastSeenAt) })}
+                    {root.expiredAt ? ` · ${props.t("profile.installed.stale")}` : ""}
                   </p>
                 </div>
-                <Badge variant="default">{root.skills.length} skills</Badge>
+                <Badge variant="default">{props.t("profile.installed.skillsCount", { count: root.skills.length })}</Badge>
               </div>
               {root.skills.length === 0 ? (
                 <p className="text-sm text-[color:var(--ink-soft)]">
-                  No skills found in this root.
+                  {props.t("profile.installed.noSkillsInRoot")}
                 </p>
               ) : (
                 <div className="flex flex-col gap-1">
@@ -325,7 +334,7 @@ function InstalledSection(props: {
                       </span>
                       <span className="font-mono text-xs text-[color:var(--ink-soft)]">
                         {entry.lastVersion ? `v${entry.lastVersion}` : "v?"}{" "}
-                        {entry.removedAt ? "· removed" : ""}
+                        {entry.removedAt ? `· ${props.t("profile.installed.removed")}` : ""}
                       </span>
                     </a>
                   ))}

@@ -8,6 +8,7 @@ import { Package } from "lucide-react";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { getSkillBadges } from "../lib/badges";
 import { formatCompactStat, formatSkillStatsTriplet } from "../lib/numberFormat";
+import { useI18n } from "../lib/i18n";
 import type { PublicPublisher, PublicSkill } from "../lib/publicUser";
 import { getRuntimeEnv } from "../lib/runtimeEnv";
 import { SkillInstallCard } from "./SkillInstallCard";
@@ -120,6 +121,7 @@ export function SkillHeader({
   clawdis,
   osLabels,
 }: SkillHeaderProps) {
+  const { t } = useI18n();
   const convexSiteUrl = getRuntimeEnv("VITE_CONVEX_SITE_URL") ?? "https://clawhub.ai";
   const formattedStats = formatSkillStatsTriplet(skill.stats);
   const suppressScanResults =
@@ -128,7 +130,7 @@ export function SkillHeader({
     !modInfo?.isMalwareBlocked &&
     !modInfo?.isSuspicious;
   const overrideScanMessage = suppressScanResults
-    ? "Security findings were reviewed by staff and cleared for public use."
+    ? t("skillDetail.header.scanCleared")
     : null;
 
   return (
@@ -136,43 +138,39 @@ export function SkillHeader({
       {modInfo?.isPendingScan ? (
         <div className="rounded-[var(--radius-md)] border border-amber-300/50 bg-amber-50 p-5 dark:border-amber-500/30 dark:bg-amber-950/40">
           <div className="flex flex-col gap-2">
-            <strong>Security scan in progress</strong>
+            <strong>{t("skillDetail.header.scanInProgress")}</strong>
             <p>
-              Your skill is being scanned by VirusTotal. It will be visible to others once the scan
-              completes. This usually takes up to 5 minutes — grab a coffee or exfoliate your shell
-              while you wait.
+              {t("skillDetail.header.scanInProgressDesc")}
             </p>
           </div>
         </div>
       ) : modInfo?.isMalwareBlocked ? (
         <div className="rounded-[var(--radius-md)] border border-red-300/50 bg-red-50 p-5 dark:border-red-500/30 dark:bg-red-950/40">
           <div className="flex flex-col gap-2">
-            <strong>Skill blocked — malicious content detected</strong>
+            <strong>{t("skillDetail.header.blockedMalicious")}</strong>
             <p>
-              ClawHub Security flagged this skill as malicious. Downloads are disabled. Review the
-              scan results below.
+              {t("skillDetail.header.blockedMaliciousDesc")}
             </p>
           </div>
         </div>
       ) : modInfo?.isSuspicious ? (
         <div className="rounded-[var(--radius-md)] border border-amber-300/50 bg-amber-50 p-5 dark:border-amber-500/30 dark:bg-amber-950/40">
           <div className="flex flex-col gap-2">
-            <strong>Skill flagged — suspicious patterns detected</strong>
+            <strong>{t("skillDetail.header.flaggedSuspicious")}</strong>
             <p>
-              ClawHub Security flagged this skill as suspicious. Review the scan results before
-              using.
+              {t("skillDetail.header.flaggedSuspiciousDesc")}
             </p>
             {canManage ? (
               <p className="text-sm text-[color:var(--ink-soft)]">
-                If you believe this skill has been incorrectly flagged, please{" "}
+                {t("skillDetail.header.flaggedIncorrectlyDesc").split("GitHub")[0]}
                 <a
                   href="https://github.com/openclaw/clawhub/issues"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  submit an issue on GitHub
+                  GitHub
                 </a>{" "}
-                and we'll break down why it was flagged and what you can do.
+                {t("skillDetail.header.flaggedIncorrectlyDesc").split("GitHub")[1]}
               </p>
             ) : null}
           </div>
@@ -180,15 +178,15 @@ export function SkillHeader({
       ) : modInfo?.isRemoved ? (
         <div className="rounded-[var(--radius-md)] border border-red-300/50 bg-red-50 p-5 dark:border-red-500/30 dark:bg-red-950/40">
           <div className="flex flex-col gap-2">
-            <strong>Skill removed by moderator</strong>
-            <p>This skill has been removed and is not visible to others.</p>
+            <strong>{t("skillDetail.header.removedByMod")}</strong>
+            <p>{t("skillDetail.header.removedByModDesc")}</p>
           </div>
         </div>
       ) : modInfo?.isHiddenByMod ? (
         <div className="rounded-[var(--radius-md)] border border-red-300/50 bg-red-50 p-5 dark:border-red-500/30 dark:bg-red-950/40">
           <div className="flex flex-col gap-2">
-            <strong>Skill hidden</strong>
-            <p>This skill is currently hidden and not visible to others.</p>
+            <strong>{t("skillDetail.header.hiddenByMod")}</strong>
+            <p>{t("skillDetail.header.hiddenByModDesc")}</p>
           </div>
         </div>
       ) : null}
@@ -205,10 +203,10 @@ export function SkillHeader({
                   {latestVersion?.version ? (
                     <Badge variant="compact">v{latestVersion.version}</Badge>
                   ) : null}
-                  {nixPlugin ? <Badge variant="accent">Plugin bundle (nix)</Badge> : null}
+                  {nixPlugin ? <Badge variant="accent">{t("skillDetail.header.pluginBundle")}</Badge> : null}
                 </div>
                 <p className="m-0 text-sm text-[color:var(--ink-soft)]">
-                  {skill.summary ?? "No summary provided."}
+                  {skill.summary ?? t("skillDetail.header.noSummary")}
                 </p>
 
                 {isStaff && staffModerationNote ? (
@@ -218,7 +216,7 @@ export function SkillHeader({
                 ) : null}
                 {nixPlugin ? (
                   <div className="rounded-[var(--radius-sm)] border border-amber-200/60 bg-amber-50/60 px-3 py-2 text-sm text-[color:var(--ink-soft)] dark:border-amber-500/20 dark:bg-amber-950/30">
-                    Bundles the skill pack, CLI binary, and config requirements in one Nix install.
+                    {t("skillDetail.header.nixBundleDesc")}
                   </div>
                 ) : null}
 
@@ -233,18 +231,18 @@ export function SkillHeader({
                     </span>
                     <span className="text-[color:var(--ink-soft)] opacity-40">·</span>
                     <span className="text-sm text-[color:var(--ink-soft)]">
-                      {formatCompactStat(skill.stats.installsCurrent ?? 0)} current
+                      {formatCompactStat(skill.stats.installsCurrent ?? 0)} {t("skillDetail.header.stats.current")}
                     </span>
                     <span className="text-[color:var(--ink-soft)] opacity-40">·</span>
                     <span className="text-sm text-[color:var(--ink-soft)]">
-                      {formattedStats.installsAllTime} all-time
+                      {formattedStats.installsAllTime} {t("skillDetail.header.stats.allTime")}
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <UserBadge
                       user={owner}
                       fallbackHandle={ownerHandle}
-                      prefix="by"
+                      prefix={t("common.by")}
                       size="md"
                       showName
                     />
@@ -265,7 +263,7 @@ export function SkillHeader({
                       <>
                         <span className="text-[color:var(--ink-soft)] opacity-40">·</span>
                         <span className="text-sm text-[color:var(--ink-soft)]">
-                          canonical:{" "}
+                          {t("skillDetail.header.canonical")}
                           <a href={canonicalHref}>
                             {canonicalOwnerHandle ? `@${canonicalOwnerHandle}/` : ""}
                             {canonical?.skill?.slug}
@@ -297,13 +295,13 @@ export function SkillHeader({
                   href={`${convexSiteUrl}/api/v1/download?slug=${skill.slug}`}
                   className="inline-flex w-full items-center justify-center gap-2 whitespace-nowrap font-semibold text-sm min-h-[44px] rounded-[var(--radius-pill)] px-4 py-[11px] border-none bg-gradient-to-br from-[color:var(--accent)] to-[color:var(--accent-deep)] text-white transition-all duration-200 no-underline hover:-translate-y-px hover:shadow-[0_10px_20px_rgba(29,26,23,0.12)]"
                 >
-                  Download zip
+                  {t("skillDetail.header.downloadZip")}
                 </a>
               ) : null}
               <div className="flex flex-col gap-2">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-xs font-semibold text-[color:var(--ink-soft)]">
-                    License
+                    {t("skillDetail.header.license")}
                   </span>
                   <span className="text-sm text-[color:var(--ink)]">
                     {PLATFORM_SKILL_LICENSE} · {PLATFORM_SKILL_LICENSE_SUMMARY}
@@ -316,14 +314,14 @@ export function SkillHeader({
                     className={`flex h-9 w-9 items-center justify-center rounded-full border transition-all duration-200 ${isStarred ? "border-amber-400/60 bg-amber-50 text-amber-500 dark:border-amber-500/40 dark:bg-amber-950/40" : "border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--ink-soft)] hover:text-amber-500"}`}
                     type="button"
                     onClick={onToggleStar}
-                    aria-label={isStarred ? "Unstar skill" : "Star skill"}
+                    aria-label={isStarred ? t("skillDetail.header.unstar") : t("skillDetail.header.star")}
                   >
                     <span aria-hidden="true">★</span>
                   </button>
                 ) : null}
                 {isAuthenticated ? (
                   <Button variant="ghost" size="sm" onClick={onOpenReport}>
-                    Report
+                    {t("skillDetail.header.report")}
                   </Button>
                 ) : null}
                 {isStaff ? (
@@ -332,7 +330,7 @@ export function SkillHeader({
                     search={{ skill: skill.slug }}
                     className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold text-xs min-h-[34px] rounded-[var(--radius-pill)] px-3 py-1.5 border border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--ink)] transition-all duration-200 no-underline"
                   >
-                    Manage
+                    {t("skillDetail.header.manage")}
                   </Link>
                 ) : null}
               </div>
@@ -356,7 +354,7 @@ export function SkillHeader({
                 capabilityTags={latestVersion?.capabilityTags}
               />
               <p className="text-xs text-[color:var(--ink-soft)]">
-                Like a lobster shell, security has layers — review code before you run it.
+                {t("skillDetail.header.securityLayers")}
               </p>
             </div>
           ) : null}
@@ -365,10 +363,10 @@ export function SkillHeader({
               <CardContent>
                 <div className="flex flex-col gap-1">
                   <div className="font-display text-base font-bold text-[color:var(--ink)]">
-                    Plugin bundle (nix)
+                    {t("skillDetail.header.pluginBundle")}
                   </div>
                   <div className="text-sm text-[color:var(--ink-soft)]">
-                    Skill pack · CLI binary · Config
+                    {t("skillDetail.header.pluginBundleDesc")}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -379,18 +377,18 @@ export function SkillHeader({
                 {configRequirements ? (
                   <div className="flex flex-col gap-2">
                     <div className="text-sm font-semibold text-[color:var(--ink)]">
-                      Config requirements
+                      {t("skillDetail.header.configRequirements")}
                     </div>
                     <div className="flex flex-col gap-1">
                       {configRequirements.requiredEnv?.length ? (
                         <div className="text-sm text-[color:var(--ink-soft)]">
-                          <strong>Required env</strong>
+                          <strong>{t("skillDetail.header.requiredEnv")}</strong>
                           <span>{configRequirements.requiredEnv.join(", ")}</span>
                         </div>
                       ) : null}
                       {configRequirements.stateDirs?.length ? (
                         <div className="text-sm text-[color:var(--ink-soft)]">
-                          <strong>State dirs</strong>
+                          <strong>{t("skillDetail.header.stateDirs")}</strong>
                           <span>{configRequirements.stateDirs.join(", ")}</span>
                         </div>
                       ) : null}
@@ -400,7 +398,7 @@ export function SkillHeader({
                 {cliHelp ? (
                   <details className="flex flex-col gap-2">
                     <summary className="cursor-pointer text-sm font-semibold text-[color:var(--ink)]">
-                      CLI help (from plugin)
+                      {t("skillDetail.header.cliHelp")}
                     </summary>
                     <pre className="mt-2 overflow-x-auto rounded-[var(--radius-sm)] bg-[color:var(--surface-muted)] p-3 font-mono text-xs">
                       {cliHelp}
@@ -414,7 +412,7 @@ export function SkillHeader({
 
         <div className="flex flex-wrap items-center gap-2 border-t border-[color:var(--line)] pt-4">
           {tagEntries.length === 0 ? (
-            <span className="m-0 text-sm text-[color:var(--ink-soft)]">No tags yet.</span>
+            <span className="m-0 text-sm text-[color:var(--ink-soft)]">{t("skillDetail.header.noTags")}</span>
           ) : (
             tagEntries.map(([tag, versionId]) => (
               <Badge key={tag} className="gap-1.5">
@@ -463,7 +461,7 @@ export function SkillHeader({
                 </option>
               ))}
             </select>
-            <Button type="submit">Update tag</Button>
+            <Button type="submit">{t("skillDetail.header.updateTag")}</Button>
           </form>
         ) : null}
 

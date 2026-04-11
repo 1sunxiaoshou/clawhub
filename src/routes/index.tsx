@@ -171,13 +171,13 @@ function SkillsHome() {
                     key={entry.skill._id}
                     skill={entry.skill}
                     badge={getSkillBadges(entry.skill)}
-                    summaryFallback="A fresh skill bundle."
+                    summaryFallback={t("skills.fallbackSummary")}
                     meta={
                       <>
                         <UserBadge
                           user={entry.owner}
                           fallbackHandle={entry.ownerHandle ?? null}
-                          prefix="by"
+                          prefix={t("common.by")}
                           link={false}
                         />
                         <span className="text-[0.8rem] text-[color:var(--ink-soft)]">
@@ -215,13 +215,13 @@ function SkillsHome() {
                   <SkillCard
                     key={entry.skill._id}
                     skill={entry.skill}
-                    summaryFallback="Agent-ready skill pack."
+                    summaryFallback={t("skills.fallbackSummary")}
                     meta={
                       <>
                         <UserBadge
                           user={entry.owner}
                           fallbackHandle={entry.ownerHandle ?? null}
-                          prefix="by"
+                          prefix={t("common.by")}
                           link={false}
                         />
                         <span className="text-[0.8rem] text-[color:var(--ink-soft)]">
@@ -365,7 +365,7 @@ function OnlyCrabsHome() {
                   <SoulCard
                     key={soul._id}
                     soul={soul}
-                    summaryFallback="A SOUL.md bundle."
+                    summaryFallback={t("home.soulsFallbackSummary")}
                     meta={
                       <span className="text-[0.8rem] text-[color:var(--ink-soft)]">
                         <SoulStatsTripletLine stats={soul.stats} />

@@ -23,6 +23,7 @@ import { Textarea } from "../components/ui/textarea";
 import { getSiteMode } from "../lib/site";
 import { getPublicSlugCollision } from "../lib/slugCollision";
 import { expandDroppedItems, expandFilesWithReport } from "../lib/uploadFiles";
+import { useI18n } from "../lib/i18n";
 import { useAuthStatus } from "../lib/useAuthStatus";
 import {
   formatBytes,
@@ -54,6 +55,7 @@ export function Upload() {
   const publishVersion = useAction(
     isSoulMode ? api.souls.publishVersion : api.skills.publishVersion,
   );
+  const { t } = useI18n();
   const generateChangelogPreview = useAction(
     isSoulMode ? api.souls.generateChangelogPreview : api.skills.generateChangelogPreview,
   );
@@ -276,42 +278,48 @@ export function Upload() {
   const validation = useMemo(() => {
     const issues: string[] = [];
     if (!trimmedSlug) {
-      issues.push("Slug is required.");
+      issues.push(t("publish.validationErrors.slugRequired"));
     } else if (!SLUG_PATTERN.test(trimmedSlug)) {
-      issues.push("Slug must be lowercase and use dashes only.");
+      issues.push(t("publish.validationErrors.slugPattern"));
     }
     if (!trimmedName) {
-      issues.push("Display name is required.");
+      issues.push(t("publish.validationErrors.nameRequired"));
     }
     if (!semver.valid(version)) {
-      issues.push("Version must be valid semver (e.g. 1.0.0).");
+      issues.push(t("publish.validationErrors.versionRequired"));
     }
     if (parsedTags.length === 0) {
-      issues.push("At least one tag is required.");
+      issues.push(t("publish.validationErrors.tagRequired"));
     }
     if (!isSoulMode && !acceptedLicenseTerms) {
-      issues.push("Accept the MIT-0 license terms to publish this skill.");
+      issues.push(t("publish.validationErrors.licenseRequired"));
     }
     if (files.length === 0) {
-      issues.push("Add at least one file.");
+      issues.push(t("publish.validationErrors.fileRequired"));
     }
     if (!hasRequiredFile) {
-      issues.push(`${requiredFileLabel} is required.`);
+      issues.push(t("publish.validationErrors.requiredFileNotFound", { file: requiredFileLabel }));
     }
     const invalidFiles = files.filter((file) => !isTextFile(file));
     if (invalidFiles.length > 0) {
       issues.push(
-        `Remove non-text files: ${invalidFiles
-          .slice(0, 3)
-          .map((file) => file.name)
-          .join(", ")}`,
+        t("publish.validationErrors.invalidFiles", {
+          files: invalidFiles
+            .slice(0, 3)
+            .map((file) => file.name)
+            .join(", "),
+        }),
       );
     }
     if (oversizedFiles.length > 0) {
-      issues.push(`Each file must be 10MB or smaller: ${oversizedFileNames.join(", ")}`);
+      issues.push(
+        t("publish.validationErrors.oversizedFiles", {
+          files: oversizedFileNames.join(", "),
+        }),
+      );
     }
     if (totalBytes > MAX_PUBLISH_TOTAL_BYTES) {
-      issues.push("Total file size exceeds 50MB.");
+      issues.push(t("publish.validationErrors.totalOversized"));
     }
     if (slugCollision) {
       issues.push(slugCollision.message);
@@ -344,10 +352,10 @@ export function Upload() {
       <main className="py-10">
         <Container size="narrow">
           <EmptyState
-            title={`Sign in to publish a ${contentLabel}`}
-            description="You need to be signed in to publish skills on ClawHub."
+            title={t("publish.signInPrompt", { type: contentLabel })}
+            description={t("publish.signInDesc")}
           >
-            <SignInButton variant="outline">Sign in with GitHub</SignInButton>
+            <SignInButton variant="outline">{t("header.signInWithGitHub")}</SignInButton>
           </EmptyState>
         </Container>
       </main>
@@ -375,31 +383,31 @@ export function Upload() {
       return;
     }
     if (!isSoulMode && !acceptedLicenseTerms) {
-      const msg = "Accept the MIT-0 license terms to publish this skill.";
+      const msg = t("publish.validationErrors.licenseRequired");
       setError(msg);
       toast.error(msg);
       return;
     }
     setError(null);
     if (oversizedFiles.length > 0) {
-      const msg = `Each file must be 10MB or smaller: ${oversizedFileNames.join(", ")}`;
+      const msg = t("publish.validationErrors.oversizedFiles", { files: oversizedFileNames.join(", ") });
       setError(msg);
       toast.error(msg);
       return;
     }
     if (totalBytes > MAX_PUBLISH_TOTAL_BYTES) {
-      const msg = "Total size exceeds 50MB per version.";
+      const msg = t("publish.validationErrors.totalOversized");
       setError(msg);
       toast.error(msg);
       return;
     }
     if (!hasRequiredFile) {
-      const msg = `${requiredFileLabel} is required.`;
+      const msg = t("publish.validationErrors.requiredFileNotFound", { file: requiredFileLabel });
       setError(msg);
       toast.error(msg);
       return;
     }
-    setStatus("Uploading files…");
+    setStatus(t("publish.uploadingFiles"));
 
     const uploaded = [] as Array<{
       path: string;
@@ -427,7 +435,7 @@ export function Upload() {
       });
     }
 
-    setStatus("Publishing…");
+    setStatus(t("publish.publishing"));
     try {
       const result = await publishVersion({
         ownerHandle: isSoulMode ? undefined : ownerHandle || undefined,
@@ -444,7 +452,7 @@ export function Upload() {
       setHasAttempted(false);
       setChangelogSource("user");
       if (result) {
-        toast.success(`Published ${trimmedSlug}@${version}`);
+        toast.success(t("publish.publishSuccess", { slug: trimmedSlug, version }));
         const ownerParam = ownerHandle || me?.handle || (me?._id ? String(me._id) : "unknown");
         void navigate({
           to: isSoulMode ? "/souls/$slug" : "/$owner/$slug",
@@ -465,10 +473,10 @@ export function Upload() {
         <header className="flex flex-col gap-2 mb-6">
           <div>
             <h1 className="font-display text-2xl font-bold text-[color:var(--ink)]">
-              Publish a {contentLabel}
+              {t("publish.title", { type: contentLabel })}
             </h1>
             <p className="text-sm text-[color:var(--ink-soft)]">
-              Drop a folder with {requiredFileLabel} and text files. We will handle the rest.
+              {t("publish.description", { requiredFile: requiredFileLabel })}
             </p>
           </div>
         </header>
@@ -477,32 +485,32 @@ export function Upload() {
           {/* Metadata panel */}
           <Card>
             <CardContent>
-              <Label htmlFor="slug">Slug</Label>
+              <Label htmlFor="slug">{t("publish.slug")}</Label>
               <div className="flex items-center gap-2">
                 <Input
                   id="slug"
                   value={slug}
                   onChange={(event) => setSlug(event.target.value)}
-                  placeholder={`${contentLabel}-name`}
+                  placeholder={t("publish.slugPlaceholder", { type: contentLabel })}
                 />
                 {trimmedSlug && SLUG_PATTERN.test(trimmedSlug) && slugAvailability ? (
                   <Badge variant={slugAvailability.available ? "success" : "destructive"}>
-                    {slugAvailability.available ? "Available" : "Taken"}
+                    {slugAvailability.available ? t("publish.available") : t("publish.taken")}
                   </Badge>
                 ) : null}
               </div>
 
-              <Label htmlFor="displayName">Display name</Label>
+              <Label htmlFor="displayName">{t("publish.displayName")}</Label>
               <Input
                 id="displayName"
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
-                placeholder={`My ${contentLabel}`}
+                placeholder={t("publish.displayNamePlaceholder", { type: contentLabel })}
               />
 
               {!isSoulMode ? (
                 <>
-                  <Label htmlFor="ownerHandle">Owner</Label>
+                  <Label htmlFor="ownerHandle">{t("publish.owner")}</Label>
                   <select
                     className="w-full min-h-[44px] rounded-[var(--radius-sm)] border px-3.5 py-[13px] text-[color:var(--ink)] transition-all duration-[180ms] ease-out border-[rgba(29,59,78,0.22)] bg-[rgba(255,255,255,0.94)] focus:outline-none focus:border-[color-mix(in_srgb,var(--accent)_70%,white)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_22%,transparent)] dark:border-[rgba(255,255,255,0.12)] dark:bg-[rgba(14,28,37,0.84)]"
                     id="ownerHandle"
@@ -518,7 +526,7 @@ export function Upload() {
                 </>
               ) : null}
 
-              <Label htmlFor="version">Version</Label>
+              <Label htmlFor="version">{t("publish.version")}</Label>
               <Input
                 id="version"
                 value={version}
@@ -526,12 +534,12 @@ export function Upload() {
                 placeholder="1.0.0"
               />
 
-              <Label htmlFor="tags">Tags</Label>
+              <Label htmlFor="tags">{t("publish.tags")}</Label>
               <Input
                 id="tags"
                 value={tags}
                 onChange={(event) => setTags(event.target.value)}
-                placeholder="latest, stable"
+                placeholder={t("publish.tagsPlaceholder")}
               />
             </CardContent>
           </Card>
@@ -577,13 +585,13 @@ export function Upload() {
                 <div className="flex flex-col items-center gap-2 text-center">
                   <div className="flex items-center gap-3">
                     <UploadIcon className="h-5 w-5 text-[color:var(--ink-soft)]" />
-                    <strong>Drop a folder</strong>
+                    <strong>{t("publish.dropFolder")}</strong>
                     <span className="text-xs font-medium text-[color:var(--ink-soft)]">
-                      {files.length} files · {sizeLabel}
+                      {t("publish.filesCount", { count: files.length, size: sizeLabel })}
                     </span>
                   </div>
                   <span className="text-xs text-[color:var(--ink-soft)]">
-                    We keep folder paths and flatten the outer wrapper automatically.
+                    {t("publish.flattenNotice")}
                   </span>
                   <Button
                     variant="outline"
@@ -591,14 +599,14 @@ export function Upload() {
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    Choose folder
+                    {t("publish.chooseFolder")}
                   </Button>
                 </div>
               </label>
 
               <div className="flex flex-col gap-1 max-h-[300px] overflow-y-auto">
                 {files.length === 0 ? (
-                  <div className="text-sm text-[color:var(--ink-soft)]">No files selected.</div>
+                  <div className="text-sm text-[color:var(--ink-soft)]">{t("publish.noFiles")}</div>
                 ) : (
                   normalizedPaths.map((path) => (
                     <div
@@ -619,9 +627,9 @@ export function Upload() {
           {/* Validation panel */}
           <Card ref={validationRef}>
             <CardContent>
-              <CardTitle>Validation</CardTitle>
+              <CardTitle>{t("publish.validation")}</CardTitle>
               {validation.issues.length === 0 ? (
-                <div className="text-sm text-[color:var(--ink-soft)]">All checks passed.</div>
+                <div className="text-sm text-[color:var(--ink-soft)]">{t("publish.checksPassed")}</div>
               ) : (
                 <ul className="flex flex-col gap-1 list-disc pl-5 text-sm text-[color:var(--ink-soft)]">
                   {validation.issues.map((issue) => (
@@ -631,7 +639,7 @@ export function Upload() {
               )}
               {slugCollision?.url ? (
                 <div className="text-sm text-[color:var(--ink-soft)]">
-                  Existing skill:{" "}
+                  {t("publish.existingSkill")}{" "}
                   <a
                     href={slugCollision.url}
                     className="text-[color:var(--accent)] hover:underline"
@@ -648,14 +656,16 @@ export function Upload() {
             <CardContent>
               {!isSoulMode ? (
                 <>
-                  <CardTitle>License</CardTitle>
+                  <CardTitle>{t("publish.license")}</CardTitle>
                   <div className="flex flex-col gap-3">
                     <Badge variant="accent">
                       {PLATFORM_SKILL_LICENSE} · {PLATFORM_SKILL_LICENSE_NAME}
                     </Badge>
                     <p className="text-sm text-[color:var(--ink-soft)]">
-                      All skills published on ClawHub are licensed under {PLATFORM_SKILL_LICENSE}.{" "}
-                      {PLATFORM_SKILL_LICENSE_SUMMARY}
+                      {t("publish.licenseDesc", {
+                        license: PLATFORM_SKILL_LICENSE,
+                        summary: PLATFORM_SKILL_LICENSE_SUMMARY,
+                      })}
                     </p>
                     <label className="flex items-start gap-2 text-sm cursor-pointer">
                       <input
@@ -665,14 +675,13 @@ export function Upload() {
                         onChange={(event) => setAcceptedLicenseTerms(event.target.checked)}
                       />
                       <span>
-                        I have the rights to this skill and agree to publish it under{" "}
-                        {PLATFORM_SKILL_LICENSE}.
+                        {t("publish.licenseAgreement", { license: PLATFORM_SKILL_LICENSE })}
                       </span>
                     </label>
                   </div>
                 </>
               ) : null}
-              <Label htmlFor="changelog">Changelog</Label>
+              <Label htmlFor="changelog">{t("publish.changelog")}</Label>
               <Textarea
                 id="changelog"
                 rows={6}
@@ -682,19 +691,19 @@ export function Upload() {
                   setChangelogSource("user");
                   setChangelog(event.target.value);
                 }}
-                placeholder={`Describe what changed in this ${contentLabel}...`}
+                placeholder={t("publish.changelogPlaceholder", { type: contentLabel })}
               />
               {changelogStatus === "loading" ? (
-                <div className="text-sm text-[color:var(--ink-soft)]">Generating changelog…</div>
+                <div className="text-sm text-[color:var(--ink-soft)]">{t("publish.generatingChangelog")}</div>
               ) : null}
               {changelogStatus === "error" ? (
                 <div className="text-sm text-[color:var(--ink-soft)]">
-                  Could not auto-generate changelog.
+                  {t("publish.changelogError")}
                 </div>
               ) : null}
               {changelogSource === "auto" && changelog ? (
                 <div className="text-sm text-[color:var(--ink-soft)]">
-                  Auto-generated changelog (edit as needed).
+                  {t("publish.changelogAutoNotice")}
                 </div>
               ) : null}
             </CardContent>
@@ -711,7 +720,7 @@ export function Upload() {
               {status ? <div className="text-sm text-[color:var(--ink-soft)]">{status}</div> : null}
               {hasAttempted && !validation.ready ? (
                 <div className="text-sm text-[color:var(--ink-soft)]">
-                  Fix validation issues to continue.
+                  {t("publish.fixIssues")}
                 </div>
               ) : null}
             </div>
@@ -722,7 +731,7 @@ export function Upload() {
               disabled={!validation.ready || isSubmitting}
               loading={isSubmitting}
             >
-              Publish {contentLabel}
+              {t("publish.submit", { type: contentLabel })}
             </Button>
           </div>
         </form>

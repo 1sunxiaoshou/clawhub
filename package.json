@@ -1,9 +1,6 @@
 {
   "name": "clawhub",
   "private": true,
-  "workspaces": [
-    "packages/*"
-  ],
   "type": "module",
   "scripts": {
     "build": "bun --bun vite build && bun scripts/copy-og-assets.ts",
@@ -76,7 +73,6 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.2",
-    "vite-tsconfig-paths": "^6.1.1",
     "yaml": "^2.8.3",
     "zod": "^4.3.6"
   },

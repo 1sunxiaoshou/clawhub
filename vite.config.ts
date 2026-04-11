@@ -6,7 +6,6 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
 import { defineConfig, type Plugin } from "vite";
-import viteTsConfigPaths from "vite-tsconfig-paths";
 
 const require = createRequire(import.meta.url);
 
@@ -159,6 +158,7 @@ function patchArkSafariInOperator(): Plugin {
 
 const config = defineConfig({
   resolve: {
+    tsconfigPaths: true,
     dedupe: ["convex", "@convex-dev/auth", "react", "react-dom"],
     alias: {
       "convex/react": convexReactPath,
@@ -179,10 +179,7 @@ const config = defineConfig({
         onwarn: handleRollupWarning,
       },
     }),
-    // this is the plugin that enables path aliases
-    viteTsConfigPaths({
-      projects: ["./tsconfig.json"],
-    }),
+    // this native setting replaces vite-tsconfig-paths
     tailwindcss(),
     tanstackStart(),
     viteReact(),

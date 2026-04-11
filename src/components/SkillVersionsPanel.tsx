@@ -1,6 +1,7 @@
 import type { Doc } from "../../convex/_generated/dataModel";
 import { getRuntimeEnv } from "../lib/runtimeEnv";
 import { type LlmAnalysis, SecurityScanResults } from "./SkillSecurityScanResults";
+import { useI18n } from "../lib/i18n";
 
 type SkillVersionsPanelProps = {
   versions: Doc<"skillVersions">[] | undefined;
@@ -17,17 +18,18 @@ export function SkillVersionsPanel({
   suppressScanResults,
   suppressedMessage,
 }: SkillVersionsPanelProps) {
+  const { t } = useI18n();
   const convexSiteUrl = getRuntimeEnv("VITE_CONVEX_SITE_URL") ?? "https://clawhub.ai";
   return (
     <div className="grid max-w-full gap-5 overflow-x-auto">
       <div>
         <h2 className="m-0 font-display text-[1.2rem] font-bold text-[color:var(--ink)]">
-          Versions
+          {t("skillDetail.versions.title")}
         </h2>
         <p className="m-0 text-sm text-[color:var(--ink-soft)]">
           {nixPlugin
-            ? "Review release history and changelog."
-            : "Download older releases or scan the changelog."}
+            ? t("skillDetail.versions.releaseHistory")
+            : t("skillDetail.versions.downloadOlder")}
         </p>
         {suppressedMessage ? (
           <p className="text-sm text-[color:var(--ink-soft)]">{suppressedMessage}</p>
@@ -44,7 +46,7 @@ export function SkillVersionsPanel({
                 <div>
                   v{version.version} · {new Date(version.createdAt).toLocaleDateString()}
                   {version.changelogSource === "auto" ? (
-                    <span className="text-[color:var(--ink-soft)]"> · auto</span>
+                    <span className="text-[color:var(--ink-soft)]"> · {t("skillDetail.versions.autoChangelog")}</span>
                   ) : null}
                 </div>
                 <div className="whitespace-pre-wrap break-words text-[color:var(--ink-soft)]">
@@ -67,7 +69,7 @@ export function SkillVersionsPanel({
                     href={`${convexSiteUrl}/api/v1/download?slug=${skillSlug}&version=${version.version}`}
                     className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold text-xs min-h-[34px] rounded-[var(--radius-pill)] px-3 py-1.5 border border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--ink)] transition-all duration-200 no-underline"
                   >
-                    Zip
+                    {t("skillDetail.versions.zip")}
                   </a>
                 </div>
               ) : null}

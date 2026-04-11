@@ -2,6 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { useRef } from "react";
 import { api } from "../../../convex/_generated/api";
+import { useI18n } from "../../lib/i18n";
 import { SKILL_CAPABILITY_TAGS } from "../../../convex/lib/skillCapabilityTags";
 import { Container } from "../../components/layout/Container";
 import { parseSort } from "./-params";
@@ -61,8 +62,9 @@ export function SkillsIndex() {
   const search = Route.useSearch();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const totalSkills = useQuery(api.skills.countPublicSkills);
+  const { t, locale } = useI18n();
   const totalSkillsText =
-    typeof totalSkills === "number" ? totalSkills.toLocaleString("en-US") : null;
+    typeof totalSkills === "number" ? totalSkills.toLocaleString(locale) : null;
 
   const model = useSkillsBrowseModel({
     navigate,
@@ -77,17 +79,17 @@ export function SkillsIndex() {
           {/* Header */}
           <header>
             <h1 className="font-display text-2xl font-bold text-[color:var(--ink)]">
-              Skills
+              {t("skills.title")}
               <span className="ml-2 text-lg font-normal text-[color:var(--ink-soft)] opacity-70">
                 ({model.hasQuery || model.highlightedOnly || model.nonSuspiciousOnly
-                  ? model.sorted.length.toLocaleString("en-US")
+                  ? model.sorted.length.toLocaleString(locale)
                   : totalSkillsText ?? "…"})
               </span>
             </h1>
             <p className="mt-1 text-sm text-[color:var(--ink-soft)]">
               {model.isLoadingSkills
-                ? "Loading skills..."
-                : `Browse the skill library${model.activeFilters.length ? ` (${model.activeFilters.join(", ")})` : ""}.`}
+                ? t("skills.loading")
+                : `${t("skills.browseDescription")}${model.activeFilters.length ? ` (${model.activeFilters.join(", ")})` : ""}.`}
             </p>
           </header>
 
@@ -114,11 +116,12 @@ export function SkillsIndex() {
           {/* Results count */}
           {model.sorted.length > 0 && (
             <p className="text-xs font-medium text-[color:var(--ink-soft)]">
-              {model.sorted.length}
-              {!model.hasQuery && totalSkillsText ? ` of ${totalSkillsText}` : ""} skills
-              {model.hasQuery ? ` matching "${model.query}"` : ""}
+              {model.sorted.length.toLocaleString(locale)}
+              {!model.hasQuery && totalSkillsText ? ` ${t("skills.of")} ${totalSkillsText}` : ""}{" "}
+              {t("skills.count", { count: model.sorted.length })}
+              {model.hasQuery ? ` ${t("skills.matching")} "${model.query}"` : ""}
               {model.highlightedOnly || model.nonSuspiciousOnly || model.capabilityTag
-                ? ` (filtered)`
+                ? ` (${t("skills.filtered")})`
                 : ""}
             </p>
           )}

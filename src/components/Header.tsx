@@ -79,7 +79,7 @@ export default function Header() {
           }}
           className="text-[color:var(--ink-soft)] font-semibold text-sm transition-colors duration-150 hover:text-[color:var(--ink)]"
         >
-          Souls
+          {t("header.souls")}
         </Link>
       ) : (
         <Link
@@ -343,10 +343,7 @@ export default function Header() {
                 size="sm"
                 disabled={isLoading}
               >
-                <span>{t("header.signIn")}</span>
-                <span className="hidden text-white/70 sm:inline">
-                  {locale === "zh-CN" ? "使用 GitHub" : "with GitHub"}
-                </span>
+                <span>{t("header.signInWithGitHub")}</span>
               </SignInButton>
             </>
           )}

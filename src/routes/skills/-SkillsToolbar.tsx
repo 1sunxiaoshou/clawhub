@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { RefObject } from "react";
 import { useMemo } from "react";
+import { useI18n } from "../../lib/i18n";
 import { SKILL_CATEGORIES, type SkillCategory } from "../../lib/categories";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -47,15 +48,6 @@ type SkillsToolbarProps = {
   onToggleView: () => void;
 };
 
-const SKILL_CAPABILITY_LABELS: Record<string, string> = {
-  crypto: "Crypto",
-  "requires-wallet": "Requires wallet",
-  "can-make-purchases": "Payments",
-  "can-sign-transactions": "Signs transactions",
-  "requires-oauth-token": "OAuth",
-  "posts-externally": "External posting",
-};
-
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   "mcp-tools": <Plug size={13} />,
   prompts: <MessageSquare size={13} />,
@@ -85,6 +77,7 @@ export function SkillsToolbar({
   onToggleDir,
   onToggleView,
 }: SkillsToolbarProps) {
+  const { t } = useI18n();
   const activeCategory = useMemo(() => {
     if (query === "__other__") return "other";
     if (!query) return undefined;
@@ -116,7 +109,7 @@ export function SkillsToolbar({
           ref={searchInputRef}
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Search skills by name, slug, or summary..."
+          placeholder={t("skills.searchPlaceholder")}
           className={`pl-10 pr-10 dark:text-[rgba(245,238,232,0.96)] ${controlSurfaceClass}`}
         />
         {query && (
@@ -124,7 +117,7 @@ export function SkillsToolbar({
             type="button"
             onClick={() => onQueryChange("")}
             className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1 text-[color:var(--ink-soft)] transition-colors hover:text-[color:var(--ink)]"
-            aria-label="Clear search"
+            aria-label={t("skills.clearSearch")}
           >
             <X className="h-4 w-4" />
           </button>
@@ -135,10 +128,10 @@ export function SkillsToolbar({
       <div className="flex flex-wrap items-center gap-2">
         {/* Filter chips */}
         <FilterChip active={highlightedOnly} onClick={onToggleHighlighted}>
-          Staff Picks
+          {t("skills.staffPicks")}
         </FilterChip>
         <FilterChip active={nonSuspiciousOnly} onClick={onToggleNonSuspicious}>
-          Clean only
+          {t("skills.cleanOnly")}
         </FilterChip>
         {capabilityTag ? (
           <FilterChip
@@ -146,7 +139,7 @@ export function SkillsToolbar({
             onClick={() => onCapabilityTagChange("__all__")}
             icon={<X className="h-3 w-3" />}
           >
-            {SKILL_CAPABILITY_LABELS[capabilityTag] ?? capabilityTag}
+            {t(`skills.capabilities.${capabilityTag}`) || capabilityTag}
           </FilterChip>
         ) : null}
         <Select
@@ -159,12 +152,12 @@ export function SkillsToolbar({
         >
           <SelectTrigger
             className={`w-auto min-w-[156px] min-h-[36px] py-1.5 text-xs font-semibold ${controlSurfaceClass} dark:text-[rgba(245,238,232,0.96)]`}
-            aria-label="Filter by category"
+            aria-label={t("skills.filterByCategory")}
           >
-            <SelectValue placeholder="All categories" />
+            <SelectValue placeholder={t("skills.allCategories")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">All categories</SelectItem>
+            <SelectItem value="__all__">{t("skills.allCategories")}</SelectItem>
             {SKILL_CATEGORIES.map((cat) => (
               <SelectItem key={cat.slug} value={cat.slug}>
                 <span className="inline-flex items-center gap-1.5">
@@ -183,18 +176,18 @@ export function SkillsToolbar({
         <Select value={sort} onValueChange={onSortChange}>
           <SelectTrigger
             className={`w-auto min-w-[140px] min-h-[36px] py-1.5 text-xs font-semibold ${controlSurfaceClass} dark:text-[rgba(245,238,232,0.96)]`}
-            aria-label="Sort skills"
+            aria-label={t("skills.sortSkills")}
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {hasQuery ? <SelectItem value="relevance">Relevance</SelectItem> : null}
-            <SelectItem value="newest">Newest</SelectItem>
-            <SelectItem value="updated">Recently updated</SelectItem>
-            <SelectItem value="downloads">Downloads</SelectItem>
-            <SelectItem value="installs">Installs</SelectItem>
-            <SelectItem value="stars">Stars</SelectItem>
-            <SelectItem value="name">Name</SelectItem>
+            {hasQuery ? <SelectItem value="relevance">{t("skills.relevance")}</SelectItem> : null}
+            <SelectItem value="newest">{t("skills.newest")}</SelectItem>
+            <SelectItem value="updated">{t("skills.updated")}</SelectItem>
+            <SelectItem value="downloads">{t("skills.downloads")}</SelectItem>
+            <SelectItem value="installs">{t("skills.installs")}</SelectItem>
+            <SelectItem value="stars">{t("skills.stars")}</SelectItem>
+            <SelectItem value="name">{t("skills.name")}</SelectItem>
           </SelectContent>
         </Select>
 
@@ -202,7 +195,7 @@ export function SkillsToolbar({
           variant="outline"
           size="sm"
           onClick={onToggleDir}
-          aria-label={`Sort direction: ${dir === "asc" ? "ascending" : "descending"}`}
+          aria-label={`${t("skills.sortSkills")} ${dir === "asc" ? t("skills.ascending") : t("skills.descending")}`}
           className="min-h-[36px] px-2 rounded-[var(--radius-sm)]"
         >
           <ArrowDownUp
@@ -222,7 +215,7 @@ export function SkillsToolbar({
                 ? "bg-[color:var(--accent)] text-white"
                 : "text-[color:var(--ink-soft)] hover:text-[color:var(--ink)]"
             }`}
-            aria-label="Grid view"
+            aria-label={t("skills.gridView")}
           >
             <Grid3X3 className="h-3.5 w-3.5" />
           </button>
@@ -234,7 +227,7 @@ export function SkillsToolbar({
                 ? "bg-[color:var(--accent)] text-white"
                 : "text-[color:var(--ink-soft)] hover:text-[color:var(--ink)]"
             }`}
-            aria-label="List view"
+            aria-label={t("skills.listView")}
           >
             <List className="h-3.5 w-3.5" />
           </button>

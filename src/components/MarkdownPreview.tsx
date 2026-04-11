@@ -41,6 +41,10 @@ function autolinkURLs(html: string): string {
  */
 export function MarkdownPreview({ children, className, highlight = true }: MarkdownPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => {
+    if (typeof document === "undefined") return "light";
+    return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  });
   // Initial sync render (no highlighting) for instant display
   const [html, setHtml] = useState(() => {
     try {
@@ -50,6 +54,21 @@ export function MarkdownPreview({ children, className, highlight = true }: Markd
       return "";
     }
   });
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    const syncTheme = () => {
+      setResolvedTheme(root.dataset.theme === "dark" ? "dark" : "light");
+    };
+    syncTheme();
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,7 +83,7 @@ export function MarkdownPreview({ children, className, highlight = true }: Markd
 
       // Async render with Shiki syntax highlighting
       void renderAsync(blocks, {
-        plugins: [shikiPlugin({ theme: "github-dark" })],
+        plugins: [shikiPlugin({ theme: resolvedTheme === "dark" ? "github-dark" : "github-light" })],
       })
         .then((highlighted) => {
           if (!cancelled) {
@@ -82,7 +101,7 @@ export function MarkdownPreview({ children, className, highlight = true }: Markd
     return () => {
       cancelled = true;
     };
-  }, [children, highlight]);
+  }, [children, highlight, resolvedTheme]);
 
   return (
     <div
