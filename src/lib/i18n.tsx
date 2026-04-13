@@ -1324,37 +1324,10 @@ function getBrowserLocale(): Locale {
   return preferredLanguages.some((value) => value.toLowerCase().startsWith("zh")) ? "zh-CN" : "en";
 }
 
-function getInitialLocale(): Locale {
-  if (typeof document !== "undefined") {
-    const attrLocale = document.documentElement.dataset.locale;
-    if (attrLocale === "zh-CN" || attrLocale === "en") return attrLocale;
-  }
-  return getStoredLocale();
-}
-
 function applyLocale(locale: Locale) {
   if (typeof document === "undefined") return;
   document.documentElement.lang = locale;
   document.documentElement.dataset.locale = locale;
-}
-
-export function getLocaleBootstrapScript() {
-  return `(() => {
-    try {
-      const key = ${JSON.stringify(LOCALE_KEY)};
-      const stored = window.localStorage.getItem(key);
-      const browserLocale = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language])
-        .some((value) => typeof value === 'string' && value.toLowerCase().startsWith('zh'))
-        ? 'zh-CN'
-        : 'en';
-      const locale = stored === 'zh-CN' || stored === 'en' ? stored : browserLocale;
-      document.documentElement.lang = locale;
-      document.documentElement.dataset.locale = locale;
-      if (stored !== locale) {
-        window.localStorage.setItem(key, locale);
-      }
-    } catch {}
-  })();`;
 }
 
 function getMessage(locale: Locale, key: MessageKey, count?: number) {
@@ -1383,19 +1356,20 @@ function interpolate(template: string, params?: Record<string, string | number>)
 }
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => getInitialLocale());
-  const [isHydrated, setIsHydrated] = useState(false);
+  const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE);
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    const preferredLocale = getStoredLocale();
+    setLocaleState((current) => (current === preferredLocale ? current : preferredLocale));
+    setHasMounted(true);
+  }, []);
 
   useEffect(() => {
     applyLocale(locale);
-    setIsHydrated(true);
-  }, [locale]);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-    applyLocale(locale);
+    if (!hasMounted || typeof window === "undefined") return;
     window.localStorage.setItem(LOCALE_KEY, locale);
-  }, [isHydrated, locale]);
+  }, [hasMounted, locale]);
 
   const contextValue = useMemo<I18nContextValue>(
     () => ({

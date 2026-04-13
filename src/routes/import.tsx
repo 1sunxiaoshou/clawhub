@@ -114,6 +114,11 @@ export function GithubImport() {
     }
   };
 
+  const selectedCount = selectedFilePaths.size;
+  const selectedBytes = selectedPreview?.files
+    .filter((f: any) => selectedFilePaths.has(f.path))
+    .reduce((acc: number, f: any) => acc + f.size, 0) || 0;
+
   if (!isAuthenticated) {
     return (
       <main className="py-20">
@@ -127,11 +132,6 @@ export function GithubImport() {
       </main>
     );
   }
-
-  const selectedCount = selectedFilePaths.size;
-  const selectedBytes = selectedPreview?.files
-    .filter((f: any) => selectedFilePaths.has(f.path))
-    .reduce((acc: number, f: any) => acc + f.size, 0) || 0;
 
   return (
     <main className="py-10">
@@ -281,7 +281,7 @@ export function GithubImport() {
                               value={version}
                               onChange={(e) => setVersion(e.target.value)}
                             />
-                            <p className="text-xs text-[color:var(--ink-soft)]">
+                          <p className="text-xs text-[color:var(--ink-soft)]">
                               {t("import.versionDesc")}
                             </p>
                           </div>
@@ -297,9 +297,9 @@ export function GithubImport() {
                               value={tags}
                               onChange={(e) => setTags(e.target.value)}
                             />
-                            <p className="text-xs text-[color:var(--ink-soft)]">
-                              {t("import.tagsDesc")}
-                            </p>
+                          <p className="text-xs text-[color:var(--ink-soft)]">
+                            {t("import.tagsDesc")}
+                          </p>
                           </div>
                         </div>
                       </div>
@@ -384,3 +384,5 @@ export function GithubImport() {
     </main>
   );
 }
+
+export { GithubImport as ImportGitHub };

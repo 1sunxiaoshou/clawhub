@@ -6,7 +6,7 @@ import { DeploymentDriftBanner } from "../components/DeploymentDriftBanner";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { Footer } from "../components/Footer";
 import Header from "../components/Header";
-import { getLocaleBootstrapScript, useI18n } from "../lib/i18n";
+import { useI18n } from "../lib/i18n";
 import { getSiteDescription, getSiteMode, getSiteName, getSiteUrlForMode } from "../lib/site";
 import appCss from "../styles.css?url";
 
@@ -113,7 +113,6 @@ function InnerRootDocument({ children }: { children: React.ReactNode }) {
   return (
     <html lang={locale}>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: getLocaleBootstrapScript() }} />
         <HeadContent />
       </head>
       <body>

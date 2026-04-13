@@ -56,7 +56,7 @@ export type PublishVersionArgs = {
   tags?: string[];
   forkOf?: { slug: string; version?: string };
   source?: {
-    kind: "github";
+    kind: "github" | "clawhub";
     url: string;
     repo: string;
     ref: string;

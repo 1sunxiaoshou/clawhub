@@ -10,7 +10,6 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 const previewImport = vi.fn();
-const previewCandidate = vi.fn();
 const importSkill = vi.fn();
 const useQueryMock = vi.fn();
 const useAuthStatusMock = vi.fn();
@@ -19,7 +18,7 @@ let useActionCallCount = 0;
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQueryMock(...args),
   useAction: () => {
-    const action = [previewImport, previewCandidate, importSkill][useActionCallCount % 3];
+    const action = [previewImport, importSkill][useActionCallCount % 2];
     useActionCallCount += 1;
     return action;
   },
@@ -32,7 +31,6 @@ vi.mock("../lib/useAuthStatus", () => ({
 describe("Import route", () => {
   beforeEach(() => {
     previewImport.mockReset();
-    previewCandidate.mockReset();
     importSkill.mockReset();
     useQueryMock.mockReset();
     useAuthStatusMock.mockReset();
@@ -50,85 +48,84 @@ describe("Import route", () => {
     });
 
     previewImport.mockResolvedValue({
-      candidates: [
+      repoUrl: "https://github.com/octo/repo",
+      commitHash: "abcdef1234567890abcdef1234567890abcdef12",
+      skills: [
         {
           path: "skill",
-          readmePath: "skill/SKILL.md",
-          name: "Taken Skill",
-          description: null,
-        },
-      ],
-    });
-
-    previewCandidate.mockResolvedValue({
-      resolved: {
-        owner: "octo",
-        repo: "repo",
-        ref: "main",
-        commit: "abcdef1234567890",
-        path: "skill",
-        repoUrl: "https://github.com/octo/repo",
-        originalUrl: "https://github.com/octo/repo",
-      },
-      candidate: {
-        path: "skill",
-        readmePath: "skill/SKILL.md",
-        name: "Taken Skill",
-        description: null,
-      },
-      defaults: {
-        selectedPaths: ["skill/SKILL.md"],
-        slug: "taken-skill",
-        displayName: "Taken Skill",
-        version: "1.0.0",
-        tags: ["latest"],
-      },
-      files: [
-        {
-          path: "skill/SKILL.md",
-          size: 120,
-          defaultSelected: true,
+          slug: "taken-skill",
+          displayName: "Taken Skill",
+          version: "1.0.0",
+          files: [
+            {
+              path: "skill/SKILL.md",
+              size: 120,
+            },
+          ],
         },
       ],
     });
   });
 
-  it("blocks import preflight when slug availability reports a collision", async () => {
-    useQueryMock.mockImplementation((_fn: unknown, args: unknown) => {
-      if (args === "skip") return undefined;
-      if (
-        args &&
-        typeof args === "object" &&
-        "slug" in (args as Record<string, unknown>) &&
-        (args as Record<string, unknown>).slug === "taken-skill"
-      ) {
-        return {
-          available: false,
-          reason: "taken",
-          message: "Slug is already taken. Choose a different slug.",
-          url: "/alice/taken-skill",
-        };
-      }
-      return null;
+  it("renders the sign-in prompt when logged out", () => {
+    useAuthStatusMock.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
+      me: null,
     });
 
     render(<ImportGitHub />);
-    fireEvent.change(screen.getByPlaceholderText("https://github.com/owner/repo"), {
+
+    expect(screen.getByText(/sign in/i)).toBeTruthy();
+  });
+
+  it("loads the skill preview and fills the defaults", async () => {
+    render(<ImportGitHub />);
+    fireEvent.change(screen.getByPlaceholderText("repo, dir path, or file"), {
       target: { value: "https://github.com/octo/repo" },
     });
     fireEvent.click(screen.getByRole("button", { name: /detect/i }));
 
     await waitFor(() => {
       expect(previewImport).toHaveBeenCalled();
-      expect(previewCandidate).toHaveBeenCalled();
     });
 
-    expect(
-      await screen.findByText(/Slug is already taken\. Choose a different slug\./i),
-    ).toBeTruthy();
-    expect(screen.getByRole("link", { name: "/alice/taken-skill" })).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: /import \+ publish/i }).getAttribute("disabled"),
-    ).not.toBeNull();
+    expect(await screen.findByDisplayValue("taken-skill")).toBeTruthy();
+    expect(screen.getByText(/Ready to import/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /import & publish/i })).toBeTruthy();
+  });
+
+  it("shows the files for a root-level skill", async () => {
+    previewImport.mockResolvedValueOnce({
+      repoUrl: "https://clawhub.ai/pskoett/self-improving-agent",
+      commitHash: "abcdef1234567890abcdef1234567890abcdef12",
+      skills: [
+        {
+          path: "",
+          slug: "self-improving",
+          displayName: "self-improving",
+          version: "1.0.0",
+          files: [
+            {
+              path: "SKILL.md",
+              size: 120,
+            },
+          ],
+        },
+      ],
+    });
+
+    render(<ImportGitHub />);
+    fireEvent.change(screen.getByPlaceholderText("repo, dir path, or file"), {
+      target: { value: "https://clawhub.ai/pskoett/self-improving-agent" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /detect/i }));
+
+    await waitFor(() => {
+      expect(previewImport).toHaveBeenCalled();
+    });
+
+    expect(await screen.findByText(/Ready to import/i)).toBeTruthy();
+    expect(screen.getAllByText(/SKILL\.md/).length).toBeGreaterThan(0);
   });
 });

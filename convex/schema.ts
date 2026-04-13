@@ -1306,6 +1306,42 @@ const skillOwnershipTransfers = defineTable({
   .index("by_from_user_status", ["fromUserId", "status"])
   .index("by_skill_status", ["skillId", "status"]);
 
+const clawhubSyncJobs = defineTable({
+  source: v.literal("clawhub"),
+  sourceUrl: v.string(),
+  startedByUserId: v.id("users"),
+  localUserId: v.id("users"),
+  status: v.union(
+    v.literal("running"),
+    v.literal("failed"),
+    v.literal("paused"),
+    v.literal("done"),
+  ),
+  pageSize: v.number(),
+  cursor: v.optional(v.string()),
+  hasMore: v.boolean(),
+  totalCount: v.optional(v.number()),
+  importedCount: v.number(),
+  skippedCount: v.number(),
+  failedCount: v.number(),
+  pageCount: v.number(),
+  attempts: v.number(),
+  lastError: v.optional(v.string()),
+  recentFailures: v.array(
+    v.object({
+      slug: v.string(),
+      reason: v.string(),
+      at: v.number(),
+    }),
+  ),
+  startedAt: v.number(),
+  updatedAt: v.number(),
+  finishedAt: v.optional(v.number()),
+})
+  .index("by_status_updated", ["status", "updatedAt"])
+  .index("by_started_by_updated", ["startedByUserId", "updatedAt"])
+  .index("by_updated", ["updatedAt"]);
+
 export default defineSchema({
   ...authTables,
   users,
@@ -1353,4 +1389,5 @@ export default defineSchema({
   userSkillInstalls,
   userSkillRootInstalls,
   skillOwnershipTransfers,
+  clawhubSyncJobs,
 });

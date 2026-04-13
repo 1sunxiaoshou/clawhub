@@ -10,6 +10,8 @@
 
 import type * as appMeta from "../appMeta.js";
 import type * as auth from "../auth.js";
+import type * as clawhubImport from "../clawhubImport.js";
+import type * as clawhubSync from "../clawhubSync.js";
 import type * as commentModeration from "../commentModeration.js";
 import type * as comments from "../comments.js";
 import type * as crons from "../crons.js";
@@ -43,6 +45,7 @@ import type * as lib_apiTokenAuth from "../lib/apiTokenAuth.js";
 import type * as lib_badges from "../lib/badges.js";
 import type * as lib_batching from "../lib/batching.js";
 import type * as lib_changelog from "../lib/changelog.js";
+import type * as lib_clawhubImport from "../lib/clawhubImport.js";
 import type * as lib_commentScamPrompt from "../lib/commentScamPrompt.js";
 import type * as lib_contentTypes from "../lib/contentTypes.js";
 import type * as lib_embeddingVisibility from "../lib/embeddingVisibility.js";
@@ -92,12 +95,14 @@ import type * as lib_staticPublishScan from "../lib/staticPublishScan.js";
 import type * as lib_tokens from "../lib/tokens.js";
 import type * as lib_userSearch from "../lib/userSearch.js";
 import type * as lib_webhooks from "../lib/webhooks.js";
+import type * as lib_zipUtils from "../lib/zipUtils.js";
 import type * as llmEval from "../llmEval.js";
 import type * as maintenance from "../maintenance.js";
 import type * as packagePublishTokens from "../packagePublishTokens.js";
 import type * as packages from "../packages.js";
 import type * as publishers from "../publishers.js";
 import type * as rateLimits from "../rateLimits.js";
+import type * as repair from "../repair.js";
 import type * as search from "../search.js";
 import type * as seed from "../seed.js";
 import type * as seedSouls from "../seedSouls.js";
@@ -126,6 +131,8 @@ import type {
 declare const fullApi: ApiFromModules<{
   appMeta: typeof appMeta;
   auth: typeof auth;
+  clawhubImport: typeof clawhubImport;
+  clawhubSync: typeof clawhubSync;
   commentModeration: typeof commentModeration;
   comments: typeof comments;
   crons: typeof crons;
@@ -159,6 +166,7 @@ declare const fullApi: ApiFromModules<{
   "lib/badges": typeof lib_badges;
   "lib/batching": typeof lib_batching;
   "lib/changelog": typeof lib_changelog;
+  "lib/clawhubImport": typeof lib_clawhubImport;
   "lib/commentScamPrompt": typeof lib_commentScamPrompt;
   "lib/contentTypes": typeof lib_contentTypes;
   "lib/embeddingVisibility": typeof lib_embeddingVisibility;
@@ -208,12 +216,14 @@ declare const fullApi: ApiFromModules<{
   "lib/tokens": typeof lib_tokens;
   "lib/userSearch": typeof lib_userSearch;
   "lib/webhooks": typeof lib_webhooks;
+  "lib/zipUtils": typeof lib_zipUtils;
   llmEval: typeof llmEval;
   maintenance: typeof maintenance;
   packagePublishTokens: typeof packagePublishTokens;
   packages: typeof packages;
   publishers: typeof publishers;
   rateLimits: typeof rateLimits;
+  repair: typeof repair;
   search: typeof search;
   seed: typeof seed;
   seedSouls: typeof seedSouls;
