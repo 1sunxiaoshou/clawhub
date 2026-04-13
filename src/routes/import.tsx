@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useAction } from "convex/react";
-import { Check, Github } from "lucide-react";
+import { useAction, useQuery } from "convex/react";
+import { Check, Github, Loader2, Pause, Play, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import { EmptyState } from "../components/EmptyState";
 import { Container } from "../components/layout/Container";
 import { SignInButton } from "../components/SignInButton";
@@ -12,27 +13,184 @@ import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { useI18n } from "../lib/i18n";
+import { isAdmin } from "../lib/roles";
 import { useAuthStatus } from "../lib/useAuthStatus";
 import { formatBytes } from "./upload/-utils";
+
+const EMPTY_FILES: any[] = [];
 
 export const Route = createFileRoute("/import")({
   component: GithubImport,
 });
 
+// ─── Clawhub 同步区域 ────────────────────────────────────────────────────────
+
+function ClawhubSyncSection() {
+  const job = useQuery(api.clawhubSync.getLatestClawhubSyncJob);
+  const triggerSync = useAction(api.clawhubSync.triggerClawhubCatalogSync);
+  const pauseSync = useAction(api.clawhubSync.pauseClawhubCatalogSync);
+  const [isBusy, setIsBusy] = useState(false);
+
+  const handleStartOrResume = async () => {
+    setIsBusy(true);
+    try {
+      await triggerSync({});
+      toast.success("同步已启动");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handlePause = async () => {
+    if (!job) return;
+    setIsBusy(true);
+    try {
+      await pauseSync({ jobId: job._id as Id<"clawhubSyncJobs"> });
+      toast.success("同步已暂停");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const processed = (job?.importedCount ?? 0) + (job?.skippedCount ?? 0) + (job?.failedCount ?? 0);
+  const total = job?.totalCount ?? 0;
+  const progressPct = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+
+  const statusLabel = (() => {
+    if (!job) return "尚未启动";
+    switch (job.status) {
+      case "running": return "同步中…";
+      case "paused": return "已暂停";
+      case "done": return "已完成";
+      case "failed": return "失败";
+      default: return job.status;
+    }
+  })();
+
+  const statusColor = (() => {
+    if (!job) return "text-[color:var(--ink-soft)]";
+    switch (job.status) {
+      case "running": return "text-blue-500";
+      case "done": return "text-green-500";
+      case "failed": return "text-red-500";
+      case "paused": return "text-amber-500";
+      default: return "text-[color:var(--ink-soft)]";
+    }
+  })();
+
+  return (
+    <Card className="mb-8 p-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">
+            ClawHub.ai 目录同步
+          </h2>
+          <p className="mt-1 text-sm text-[color:var(--ink-soft)]">
+            从上游 ClawHub.ai 批量同步技能到本地实例
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {job?.status === "running" ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isBusy}
+              onClick={handlePause}
+            >
+              {isBusy ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Pause className="mr-2 h-4 w-4" />
+              )}
+              暂停同步
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              disabled={isBusy}
+              onClick={handleStartOrResume}
+            >
+              {isBusy ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : job?.status === "paused" ? (
+                <Play className="mr-2 h-4 w-4" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              {!job || job.status === "done" ? "开始同步" : "恢复同步"}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* 进度条 */}
+      <div className="mt-5">
+        <div className="mb-1.5 flex items-center justify-between text-sm">
+          <span className={`font-semibold ${statusColor}`}>{statusLabel}</span>
+          <span className="text-[color:var(--ink-soft)]">
+            {total > 0
+              ? `${processed.toLocaleString()} / ${total.toLocaleString()} (${progressPct}%)`
+              : processed > 0
+                ? `已处理 ${processed.toLocaleString()} 条`
+                : "—"}
+          </span>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-[color:var(--line)]">
+          <div
+            className="h-full rounded-full bg-[color:var(--accent)] transition-all duration-500"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      </div>
+
+      {/* 详细统计 */}
+      {job && (
+        <div className="mt-4 flex flex-wrap gap-4 text-xs text-[color:var(--ink-soft)]">
+          <span>
+            <span className="font-semibold text-green-500">{job.importedCount.toLocaleString()}</span> 已导入
+          </span>
+          <span>
+            <span className="font-semibold">{job.skippedCount.toLocaleString()}</span> 已跳过
+          </span>
+          {job.failedCount > 0 && (
+            <span>
+              <span className="font-semibold text-red-500">{job.failedCount.toLocaleString()}</span> 失败
+            </span>
+          )}
+          {job.lastError && (
+            <span className="italic text-amber-500">{job.lastError}</span>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ─── GitHub 手动导入 ─────────────────────────────────────────────────────────
+
 export function GithubImport() {
   const { t } = useI18n();
-  const { isAuthenticated } = useAuthStatus();
+  const { isAuthenticated, me } = useAuthStatus();
   const [url, setUrl] = useState("");
   const [isDetecting, setIsDetecting] = useState(false);
   const [preview, setPreview] = useState<any>(null);
+  const [candidatePreview, setCandidatePreview] = useState<any>(null);
+  const [isPreviewingCandidate, setIsPreviewingCandidate] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const detectGithubSkill = useAction(api.skills.detectGithubSkill);
-  const importSkill = useAction(api.skills.importFromGithub);
+  const detectGithubSkill = useAction(api.githubImport.previewGitHubImport);
+  const previewCandidate = useAction(api.githubImport.previewGitHubImportCandidate);
+  const importSkill = useAction(api.githubImport.importGitHubSkill);
   const navigate = useNavigate();
 
   const [selectedSkillIndex, setSelectedSkillIndex] = useState(0);
-  const selectedPreview = preview?.skills?.[selectedSkillIndex];
+  const selectedCandidate = preview?.candidates?.[selectedSkillIndex];
+  const selectedPreview = candidatePreview;
+  const selectedPreviewFiles = selectedPreview?.files ?? EMPTY_FILES;
 
   const [slug, setSlug] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -41,23 +199,60 @@ export function GithubImport() {
   const [selectedFilePaths, setSelectedFilePaths] = useState<Set<string>>(new Set());
   const [isBusy, setIsBusy] = useState(false);
 
+  const admin = isAdmin(me);
+
   useEffect(() => {
     if (selectedPreview) {
-      setSlug(selectedPreview.slug || "");
-      setDisplayName(selectedPreview.displayName || "");
-      setVersion(selectedPreview.version || "1.0.0");
-      setSelectedFilePaths(new Set(selectedPreview.files.map((f: any) => f.path)));
+      setSlug(selectedPreview.defaults?.slug || "");
+      setDisplayName(selectedPreview.defaults?.displayName || "");
+      setVersion(selectedPreview.defaults?.version || "1.0.0");
+      setSelectedFilePaths(new Set(selectedPreviewFiles.map((f: any) => f.path)));
     }
-  }, [selectedPreview]);
+  }, [selectedPreview, selectedPreviewFiles]);
+
+  // 当切换候选人时，自动拉取该候选人的详细预览
+  useEffect(() => {
+    if (!url || !selectedCandidate) {
+      setCandidatePreview(null);
+      setIsPreviewingCandidate(false);
+      return;
+    }
+
+    let cancelled = false;
+    setCandidatePreview(null);
+    setIsPreviewingCandidate(true);
+    setError(null);
+
+    void previewCandidate({
+      url,
+      candidatePath: selectedCandidate.path,
+    })
+      .then((result) => {
+        if (cancelled) return;
+        setCandidatePreview(result);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setIsPreviewingCandidate(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [previewCandidate, selectedCandidate, url]);
 
   const handleDetect = async () => {
     if (!url) return;
     setIsDetecting(true);
     setError(null);
     setPreview(null);
+    setCandidatePreview(null);
     try {
       const result = await detectGithubSkill({ url });
-      if (result.skills.length === 0) {
+      if (result.candidates.length === 0) {
         setError(t("skillDetail.skillNotFound"));
       } else {
         setPreview(result);
@@ -72,7 +267,7 @@ export function GithubImport() {
 
   const selectAll = () => {
     if (!selectedPreview) return;
-    setSelectedFilePaths(new Set(selectedPreview.files.map((f: any) => f.path)));
+    setSelectedFilePaths(new Set(selectedPreviewFiles.map((f: any) => f.path)));
   };
 
   const clearAll = () => {
@@ -88,7 +283,7 @@ export function GithubImport() {
 
   const applyDefaultSelection = () => {
     if (!selectedPreview) return;
-    setSelectedFilePaths(new Set(selectedPreview.files.map((f: any) => f.path)));
+    setSelectedFilePaths(new Set(selectedPreviewFiles.map((f: any) => f.path)));
   };
 
   const handleImport = async () => {
@@ -96,28 +291,27 @@ export function GithubImport() {
     setIsBusy(true);
     try {
       await importSkill({
-        repoUrl: preview.repoUrl,
-        commitHash: preview.commitHash,
-        skillPath: selectedPreview.path,
+        url: preview.resolved.originalUrl,
+        commit: preview.resolved.commit,
+        candidatePath: selectedPreview.candidate?.path ?? selectedCandidate?.path ?? "",
         slug,
         displayName,
         version,
         tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
-        filePaths: Array.from(selectedFilePaths),
+        selectedPaths: Array.from(selectedFilePaths),
       });
       toast.success(t("import.imported"));
-      void navigate({ to: "/dashboard" });
+      if (isAuthenticated && me) {
+        void navigate({ to: "/dashboard" });
+      } else {
+        void navigate({ to: `/local/${encodeURIComponent(slug.trim())}` });
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setIsBusy(false);
     }
   };
-
-  const selectedCount = selectedFilePaths.size;
-  const selectedBytes = selectedPreview?.files
-    .filter((f: any) => selectedFilePaths.has(f.path))
-    .reduce((acc: number, f: any) => acc + f.size, 0) || 0;
 
   if (!isAuthenticated) {
     return (
@@ -126,12 +320,19 @@ export function GithubImport() {
           <EmptyState
             title={t("import.signInPrompt")}
             description={t("import.signInDesc")}
-            action={<SignInButton />}
-          />
+          >
+            <SignInButton />
+          </EmptyState>
         </Container>
       </main>
     );
   }
+
+  const selectedCount = selectedFilePaths.size;
+  const selectedBytes =
+    selectedPreviewFiles
+      ?.filter((f: any) => selectedFilePaths.has(f.path))
+      .reduce((acc: number, f: any) => acc + f.size, 0) || 0;
 
   return (
     <main className="py-10">
@@ -147,17 +348,23 @@ export function GithubImport() {
             {t("import.description")}
           </p>
           <div className="mt-4 rounded-[var(--radius-md)] border border-amber-200/50 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-950/30 dark:bg-amber-950/40 dark:text-amber-200">
-            {t("import.skillOnlyNotice", {
-              link: (
-                <Link to="/publish-skill" className="font-bold underline">
-                  {t("import.publishPlugin")}
-                </Link>
-              ),
-            })}
+            {t("import.skillOnlyNotice", { link: "" }).replace("Use .", "")}
+            <Link
+              to="/publish-skill"
+              search={{ updateSlug: undefined }}
+              className="font-bold underline"
+            >
+              {t("import.publishPlugin")}
+            </Link>
+            .
           </div>
         </header>
 
         <section className="mx-auto max-w-3xl">
+          {/* ── 管理员专属：Clawhub 同步区域 ── */}
+          {admin && <ClawhubSyncSection />}
+
+          {/* ── GitHub 手动导入 ── */}
           <Card className="mb-8 p-6">
             <div className="flex flex-col gap-4">
               <label htmlFor="repo-url" className="text-sm font-semibold text-[color:var(--ink)]">
@@ -203,22 +410,21 @@ export function GithubImport() {
             <div className="flex flex-col gap-8">
               <div className="flex flex-col gap-3">
                 <h2 className="font-display text-xl font-bold text-[color:var(--ink)]">
-                  {t("import.foundSkills", { count: preview.skills.length })}
+                  {t("import.foundSkills", { count: preview.candidates.length })}
                 </h2>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {preview.skills.map((s: any, i: number) => (
+                  {preview.candidates.map((s: any, i: number) => (
                     <button
                       key={s.path}
                       type="button"
                       onClick={() => setSelectedSkillIndex(i)}
-                      className={`flex flex-col items-start gap-1 rounded-[var(--radius-md)] border p-4 text-left transition-all ${
-                        selectedSkillIndex === i
-                          ? "border-[color:var(--accent)] bg-[color:var(--accent-muted)] ring-1 ring-[color:var(--accent)]"
-                          : "border-[color:var(--line)] bg-[color:var(--surface)] hover:border-[color:var(--ink-soft)]"
-                      }`}
+                      className={`flex flex-col items-start gap-1 rounded-[var(--radius-md)] border p-4 text-left transition-all ${selectedSkillIndex === i
+                        ? "border-[color:var(--accent)] bg-[color:var(--accent-muted)] ring-1 ring-[color:var(--accent)]"
+                        : "border-[color:var(--line)] bg-[color:var(--surface)] hover:border-[color:var(--ink-soft)]"
+                        }`}
                     >
                       <span className="font-bold text-[color:var(--ink)]">
-                        {s.displayName || s.slug || s.path}
+                        {s.name || s.path}
                       </span>
                       <span className="font-mono text-xs text-[color:var(--ink-soft)]">
                         {s.path === "." ? "root" : s.path}
@@ -227,6 +433,13 @@ export function GithubImport() {
                   ))}
                 </div>
               </div>
+
+              {isPreviewingCandidate && !selectedPreview && (
+                <p className="text-sm text-[color:var(--ink-soft)]">
+                  <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+                  {t("import.loading")}
+                </p>
+              )}
 
               {selectedPreview && (
                 <div className="grid gap-8 lg:grid-cols-[1fr_280px]">
@@ -281,7 +494,7 @@ export function GithubImport() {
                               value={version}
                               onChange={(e) => setVersion(e.target.value)}
                             />
-                          <p className="text-xs text-[color:var(--ink-soft)]">
+                            <p className="text-xs text-[color:var(--ink-soft)]">
                               {t("import.versionDesc")}
                             </p>
                           </div>
@@ -297,9 +510,9 @@ export function GithubImport() {
                               value={tags}
                               onChange={(e) => setTags(e.target.value)}
                             />
-                          <p className="text-xs text-[color:var(--ink-soft)]">
-                            {t("import.tagsDesc")}
-                          </p>
+                            <p className="text-xs text-[color:var(--ink-soft)]">
+                              {t("import.tagsDesc")}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -330,13 +543,13 @@ export function GithubImport() {
                       <p className="mt-2 text-sm text-[color:var(--ink-soft)]">
                         {t("import.selectedStats", {
                           selected: selectedCount,
-                          total: selectedPreview.files.length,
+                          total: selectedPreviewFiles.length,
                           size: formatBytes(selectedBytes),
                         })}
                       </p>
 
                       <div className="mt-6 max-h-[400px] overflow-y-auto rounded-lg border border-[color:var(--line)] bg-[color:var(--surface-muted)]">
-                        {selectedPreview.files.map((file: any) => (
+                        {selectedPreviewFiles.map((file: any) => (
                           <div
                             key={file.path}
                             className="flex items-center gap-3 border-b border-[color:var(--line)] px-4 py-2 last:border-0"

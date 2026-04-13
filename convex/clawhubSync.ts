@@ -546,7 +546,7 @@ export const syncClawhubCatalogBatch = internalAction({
         jobId: args.jobId,
         importedDelta: imported,
         skippedDelta: skipped,
-        pageCountDelta: shouldResumeSamePage ? 0 : 1, 
+        pageCountDelta: shouldResumeSamePage ? 0 : 1,
         cursor: effectiveHasMore ? (effectiveNextCursor ?? undefined) : undefined,
         hasMore: effectiveHasMore,
         totalCount: !effectiveHasMore ? job.importedCount + imported + job.skippedCount + skipped + job.failedCount + failed.length : undefined,
@@ -641,32 +641,13 @@ async function syncClawhubSkillPage(
   });
   const existingVersion = existingSkill?.latestVersionId
     ? await ctx.runQuery(internal.skills.getVersionByIdInternal, {
-        versionId: existingSkill.latestVersionId,
-      })
+      versionId: existingSkill.latestVersionId,
+    })
     : null;
 
-  const sourceCommit =
-    existingVersion?.parsed &&
-    typeof existingVersion.parsed === "object" &&
-    !Array.isArray(existingVersion.parsed) &&
-    "metadata" in existingVersion.parsed &&
-    typeof (existingVersion.parsed as Record<string, unknown>).metadata === "object"
-      ? getSourceCommit((existingVersion.parsed as Record<string, unknown>).metadata)
-      : null;
-  if (sourceCommit && sourceCommit === resolved.zipHash) {
-    if (params.upstreamStats && existingSkill) {
-      await ctx.runMutation(internal.clawhubSync.updateClawhubSkillStatsInternal, {
-        skillId: existingSkill._id,
-        stats: params.upstreamStats,
-      });
-    }
-    return "skipped" as const;
-  }
-
   let zipBytes: Uint8Array | null = resolved.zipBytes;
-  const zipHash = resolved.zipHash;
   const canonicalUrl = resolved.canonicalUrl;
-  
+
   let entries: Record<string, Uint8Array> | null = stripGitHubZipRoot(unzipToEntries(zipBytes));
   // Free zipBytes as we now have entries
   zipBytes = null;
@@ -741,15 +722,14 @@ async function syncClawhubSkillPage(
     changelog: "",
     tags: ["latest"],
     files: storedFiles,
-      source: {
-        kind: "clawhub",
-        url: canonicalUrl,
-        repo: buildClawhubSourceRepo({ canonicalUrl }),
-        ref: "latest",
-        commit: zipHash,
-        path: candidate.path,
-        importedAt: Date.now(),
-      },
+    source: {
+      kind: "clawhub",
+      url: canonicalUrl,
+      repo: buildClawhubSourceRepo({ canonicalUrl }),
+      ref: "latest",
+      path: candidate.path,
+      importedAt: Date.now(),
+    },
   }, {
     bypassGitHubAccountAge: true,
     bypassNewSkillRateLimit: true,
@@ -873,15 +853,6 @@ async function fetchClawhubCatalogPage(cursor: string | null, numItems: number) 
   }
 }
 
-
-function getSourceCommit(metadata: unknown) {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
-  const source = (metadata as Record<string, unknown>).source;
-  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
-  const commit = (source as Record<string, unknown>).commit;
-  return typeof commit === "string" ? commit : null;
-}
-
 function toDisplayName(slug: string) {
   return slug
     .replace(/[-_]+/g, " ")
@@ -940,11 +911,11 @@ async function fetchClawhubTotalCount(fetcher: typeof fetch) {
 function normalizeUpstreamStats(
   stats:
     | {
-        downloads?: number | null;
-        stars?: number | null;
-        installsCurrent?: number | null;
-        installsAllTime?: number | null;
-      }
+      downloads?: number | null;
+      stars?: number | null;
+      installsCurrent?: number | null;
+      installsAllTime?: number | null;
+    }
     | null
     | undefined,
 ) {

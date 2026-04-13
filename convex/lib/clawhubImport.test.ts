@@ -70,7 +70,6 @@ describe("clawhub import", () => {
     expect(resolved.canonicalUrl).toBe("https://clawhub.ai/skills/demo");
     expect(resolved.downloadZipUrl).toBe("https://clawhub.ai/download/demo.zip");
     expect(resolved.slug).toBe("demo");
-    expect(resolved.zipHash).toMatch(/^[a-f0-9]{64}$/);
     expect(resolved.zipBytes).toBeInstanceOf(Uint8Array);
     expect(resolved.zipBytes.byteLength).toBeGreaterThan(0);
   });

@@ -10,7 +10,6 @@
 
 import type * as appMeta from "../appMeta.js";
 import type * as auth from "../auth.js";
-import type * as clawhubImport from "../clawhubImport.js";
 import type * as clawhubSync from "../clawhubSync.js";
 import type * as commentModeration from "../commentModeration.js";
 import type * as comments from "../comments.js";
@@ -131,7 +130,6 @@ import type {
 declare const fullApi: ApiFromModules<{
   appMeta: typeof appMeta;
   auth: typeof auth;
-  clawhubImport: typeof clawhubImport;
   clawhubSync: typeof clawhubSync;
   commentModeration: typeof commentModeration;
   comments: typeof comments;
