@@ -1,3 +1,4 @@
+import { inflateSync } from "fflate";
 import { ConvexError } from "convex/values";
 import { isMacJunkPath } from "./skills";
 
@@ -5,18 +6,44 @@ import { isMacJunkPath } from "./skills";
 
 export const MAX_REMOTE_ZIP_BYTES = 25 * 1024 * 1024;
 export const MAX_SELECTED_BYTES = 50 * 1024 * 1024;
-export const MAX_UNZIPPED_BYTES = 40 * 1024 * 1024;
-export const MAX_FILE_COUNT = 7_500;
+export const MAX_UNZIPPED_BYTES = 10 * 1024 * 1024;
+export const MAX_FILE_COUNT = 100;
 export const MAX_SINGLE_FILE_BYTES = 10 * 1024 * 1024;
+export const MAX_ARCHIVE_MEMORY_BUDGET_BYTES = 48 * 1024 * 1024;
+const MAX_DOWNLOAD_RETRIES = 3;
+const BASE_RETRY_DELAY_MS = 1_500;
 
 /* ─── ZIP download ────────────────────────────────────────────────── */
 
 export async function fetchClawhubZipBytes(downloadZipUrl: string, fetcher: typeof fetch) {
-  const response = await fetcher(downloadZipUrl, {
-    headers: { "User-Agent": "clawhub/clawhub-import" },
-  });
-  if (!response.ok) throw new ConvexError("ClawHub archive download failed");
-  return await readLimitedBytes(response, MAX_REMOTE_ZIP_BYTES);
+  let lastStatus = 0;
+  let lastBody = "";
+
+  for (let attempt = 0; attempt <= MAX_DOWNLOAD_RETRIES; attempt += 1) {
+    const response = await fetcher(downloadZipUrl, {
+      headers: { "User-Agent": "clawhub/clawhub-import" },
+    });
+
+    if (response.ok) {
+      return await readLimitedBytes(response, MAX_REMOTE_ZIP_BYTES);
+    }
+
+    lastStatus = response.status;
+    lastBody = await response.text().catch(() => "");
+
+    if (!shouldRetryDownload(response.status) || attempt === MAX_DOWNLOAD_RETRIES) {
+      break;
+    }
+
+    await delay(getRetryDelayMs(response, attempt));
+  }
+
+  if (lastStatus === 429) {
+    throw new ConvexError(
+      `ClawHub archive download rate limited (429): ${lastBody || "Rate limit exceeded"}`,
+    );
+  }
+  throw new ConvexError(`ClawHub archive download failed: ${lastStatus || "unknown"}`);
 }
 
 export async function readLimitedBytes(response: Response, maxBytes: number) {
@@ -62,6 +89,7 @@ export function unzipToEntries(
   zipBytes: Uint8Array,
   unzipSync: (data: Uint8Array) => Record<string, Uint8Array>,
 ) {
+  assertZipInflationBudget(zipBytes);
   const entries = unzipSync(zipBytes);
   const out: Record<string, Uint8Array> = {};
   const rawPaths = Object.keys(entries);
@@ -78,6 +106,174 @@ export function unzipToEntries(
     out[normalizedPath] = bytes;
   }
   return out;
+}
+
+export function selectiveUnzip(
+  zipBytes: Uint8Array,
+  matchFn: (path: string) => boolean,
+) {
+  const eocdOffset = findEocdOffset(zipBytes);
+  if (eocdOffset < 0) return {};
+
+  const totalEntries = readUint16(zipBytes, eocdOffset + 10);
+  const centralDirectoryOffset = readUint32(zipBytes, eocdOffset + 16);
+
+  const out: Record<string, Uint8Array> = {};
+  let offset = centralDirectoryOffset;
+
+  for (let i = 0; i < totalEntries; i += 1) {
+    if (readUint32(zipBytes, offset) !== 0x02014b50) break;
+
+    const compressionMethod = readUint16(zipBytes, offset + 10);
+    const compressedSize = readUint32(zipBytes, offset + 20);
+    const fileNameLength = readUint16(zipBytes, offset + 28);
+    const extraFieldLength = readUint16(zipBytes, offset + 30);
+    const fileCommentLength = readUint16(zipBytes, offset + 32);
+    const localHeaderOffset = readUint32(zipBytes, offset + 42);
+
+    const fileNameBytes = zipBytes.slice(offset + 46, offset + 46 + fileNameLength);
+    const fileName = new TextDecoder().decode(fileNameBytes);
+    const normalizedPath = normalizeZipPath(fileName);
+
+    if (normalizedPath && matchFn(normalizedPath)) {
+      const lfhOffset = localHeaderOffset;
+      const lfhFileNameLen = readUint16(zipBytes, lfhOffset + 26);
+      const lfhExtraLen = readUint16(zipBytes, lfhOffset + 28);
+      const dataStart = lfhOffset + 30 + lfhFileNameLen + lfhExtraLen;
+      const compressedData = zipBytes.slice(dataStart, dataStart + compressedSize);
+
+      if (compressionMethod === 8) {
+        // DEFLATE
+        out[normalizedPath] = inflateSync(compressedData);
+      } else if (compressionMethod === 0) {
+        // STORE
+        out[normalizedPath] = compressedData;
+      }
+    }
+
+    offset += 46 + fileNameLength + extraFieldLength + fileCommentLength;
+  }
+  return out;
+}
+
+function assertZipInflationBudget(zipBytes: Uint8Array) {
+  const estimate = estimateZipInflation(zipBytes);
+  if (!estimate) return;
+  if (estimate.fileCount > MAX_FILE_COUNT) {
+    throw new ConvexError("Repo archive has too many files");
+  }
+  if (estimate.totalUncompressedBytes > MAX_UNZIPPED_BYTES) {
+    throw new ConvexError("Repo archive is too large");
+  }
+  if (estimate.totalUncompressedBytes + zipBytes.byteLength > MAX_ARCHIVE_MEMORY_BUDGET_BYTES) {
+    throw new ConvexError("Repo archive exceeds action memory budget");
+  }
+}
+
+function estimateZipInflation(zipBytes: Uint8Array) {
+  const eocdOffset = findEocdOffset(zipBytes);
+  if (eocdOffset < 0) return null;
+
+  const totalEntries = readUint16(zipBytes, eocdOffset + 10);
+  const centralDirectorySize = readUint32(zipBytes, eocdOffset + 12);
+  const centralDirectoryOffset = readUint32(zipBytes, eocdOffset + 16);
+
+  if (
+    totalEntries === 0xffff ||
+    centralDirectorySize === 0xffffffff ||
+    centralDirectoryOffset === 0xffffffff
+  ) {
+    return null;
+  }
+
+  let offset = centralDirectoryOffset;
+  let fileCount = 0;
+  let totalUncompressedBytes = 0;
+
+  while (offset + 46 <= zipBytes.byteLength && fileCount < totalEntries) {
+    if (readUint32(zipBytes, offset) !== 0x02014b50) {
+      return null;
+    }
+    const compressedSize = readUint32(zipBytes, offset + 20);
+    const uncompressedSize = readUint32(zipBytes, offset + 24);
+    const fileNameLength = readUint16(zipBytes, offset + 28);
+    const extraFieldLength = readUint16(zipBytes, offset + 30);
+    const fileCommentLength = readUint16(zipBytes, offset + 32);
+
+    if (
+      compressedSize === 0xffffffff ||
+      uncompressedSize === 0xffffffff
+    ) {
+      return null;
+    }
+
+    totalUncompressedBytes += uncompressedSize;
+    fileCount += 1;
+    offset += 46 + fileNameLength + extraFieldLength + fileCommentLength;
+
+    if (fileCount > MAX_FILE_COUNT || totalUncompressedBytes > MAX_UNZIPPED_BYTES) {
+      return { fileCount, totalUncompressedBytes };
+    }
+  }
+
+  return fileCount === totalEntries ? { fileCount, totalUncompressedBytes } : null;
+}
+
+export function inspectZipArchive(zipBytes: Uint8Array) {
+  const estimate = estimateZipInflation(zipBytes);
+  return {
+    zipBytes: zipBytes.byteLength,
+    estimate,
+    exceedsLimits: estimate
+      ? estimate.fileCount > MAX_FILE_COUNT ||
+        estimate.totalUncompressedBytes > MAX_UNZIPPED_BYTES ||
+        estimate.totalUncompressedBytes + zipBytes.byteLength > MAX_ARCHIVE_MEMORY_BUDGET_BYTES
+      : false,
+  };
+}
+
+function findEocdOffset(zipBytes: Uint8Array) {
+  const minEocdSize = 22;
+  const maxCommentLength = 0xffff;
+  const start = Math.max(0, zipBytes.byteLength - minEocdSize - maxCommentLength);
+  for (let offset = zipBytes.byteLength - minEocdSize; offset >= start; offset -= 1) {
+    if (readUint32(zipBytes, offset) === 0x06054b50) {
+      return offset;
+    }
+  }
+  return -1;
+}
+
+function readUint16(bytes: Uint8Array, offset: number) {
+  return bytes[offset] | (bytes[offset + 1] << 8);
+}
+
+function readUint32(bytes: Uint8Array, offset: number) {
+  return (
+    bytes[offset] |
+    (bytes[offset + 1] << 8) |
+    (bytes[offset + 2] << 16) |
+    (bytes[offset + 3] << 24)
+  ) >>> 0;
+}
+
+function shouldRetryDownload(status: number) {
+  return status === 429 || status === 503;
+}
+
+function getRetryDelayMs(response: Response, attempt: number) {
+  const retryAfter = response.headers.get("retry-after");
+  if (retryAfter) {
+    const seconds = Number.parseFloat(retryAfter);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return Math.ceil(seconds * 1_000);
+    }
+  }
+  return BASE_RETRY_DELAY_MS * (attempt + 1);
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function normalizeZipPath(path: string) {

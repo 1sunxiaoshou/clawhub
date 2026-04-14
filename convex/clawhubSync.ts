@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { unzipSync } from "fflate";
 import semver from "semver";
 import { internal } from "./_generated/api";
-import type { Doc, Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { action, internalAction, internalMutation, internalQuery, query } from "./functions";
 import { assertAdmin, requireUser, requireUserFromAction } from "./lib/access";
@@ -15,23 +15,28 @@ import {
   suggestVersion,
 } from "./lib/githubImport";
 import {
-  resolveClawhubImportPage,
+  downloadClawhubImportZip,
+  resolveClawhubImportMetadata,
 } from "./lib/clawhubImport";
+import {
+  CLAWHUB_CONVEX_QUERY_URL,
+  DEFAULT_CLAWHUB_PAGE_SIZE,
+  FETCH_TIMEOUT_MS,
+  MAX_CLAWHUB_PAGE_SIZE,
+  MAX_IMPORT_BATCH_ITEMS,
+  MIN_CLAWHUB_PAGE_SIZE,
+} from "./lib/clawhubSyncConfig";
 import { publishVersionForUser } from "./lib/skillPublish";
 import { sanitizePath } from "./lib/skills";
 import {
   buildClawhubSourceRepo,
+  inspectZipArchive,
   MAX_SELECTED_BYTES,
+  selectiveUnzip as selectiveUnzipShared,
   sha256Hex,
   toErrorMessage,
   unzipToEntries as unzipToEntriesShared,
 } from "./lib/zipUtils";
-
-const CLAWHUB_CONVEX_QUERY_URL =
-  "https://wry-manatee-359.convex.cloud/api/query";
-const CLAWHUB_PAGE_SIZE = 100;
-const MAX_IMPORT_BATCH_ITEMS = 1;
-const FETCH_TIMEOUT_MS = 60000;
 
 type ClawhubCatalogEntry = {
   latestVersion: { version?: string | null; createdAt?: number | null } | null;
@@ -93,9 +98,27 @@ type ClawhubSyncJobDoc = {
   finishedAt?: number;
 };
 
+type SyncCursorState = {
+  pageCursor: string | null;
+  pageOffset: number;
+};
+
+type LocalSkillVersionSummary = {
+  slug: string;
+  version: string | null;
+};
+
 function isStaleRunningSyncJob(job: ClawhubSyncJobDoc | null) {
   if (!job) return false;
   return job.status === "running" && job.hasMore === false;
+}
+
+function hasRemainingSyncWork(job: ClawhubSyncJobDoc | null) {
+  if (!job) return false;
+  const processed = job.importedCount + job.skippedCount + job.failedCount;
+  if (job.cursor) return true;
+  if (typeof job.totalCount === "number" && job.totalCount > processed) return true;
+  return false;
 }
 
 export const getLatestClawhubSyncJob = query({
@@ -128,6 +151,96 @@ export const getClawhubSyncJobByIdInternal = internalQuery({
   },
   handler: async (ctx, args): Promise<ClawhubSyncJobDoc | null> => {
     return (await ctx.db.get(args.jobId)) as ClawhubSyncJobDoc | null;
+  },
+});
+
+export const getLatestClawhubSyncJobView = query({
+  args: {},
+  handler: async (ctx) => {
+    const { user } = await requireUser(ctx);
+    assertAdmin(user);
+    const job = (await ctx.db
+      .query("clawhubSyncJobs")
+      .withIndex("by_updated", (q) => q.gte("updatedAt", 0))
+      .order("desc")
+      .first()) as ClawhubSyncJobDoc | null;
+
+    const processed =
+      (job?.importedCount ?? 0) + (job?.skippedCount ?? 0) + (job?.failedCount ?? 0);
+    const total = job?.totalCount ?? 0;
+    const hasRemainingWork = hasRemainingSyncWork(job);
+
+    const phase = !job
+      ? "idle"
+      : job.status === "running"
+        ? "running"
+        : job.status === "paused"
+          ? hasRemainingWork
+            ? "paused_resumable"
+            : "paused_terminal"
+          : job.status === "failed"
+            ? hasRemainingWork
+              ? "failed_resumable"
+              : "failed_terminal"
+            : "completed";
+
+    const primaryAction =
+      phase === "running"
+        ? "pause"
+        : phase === "paused_resumable" || phase === "failed_resumable"
+          ? "resume"
+          : "restart";
+
+    const statusLabel =
+      phase === "idle"
+        ? "尚未启动"
+        : phase === "running"
+          ? "同步中…"
+          : phase === "paused_resumable"
+            ? "已暂停，可继续"
+            : phase === "paused_terminal"
+              ? "已暂停"
+              : phase === "failed_resumable"
+                ? "已中断，可继续"
+                : phase === "failed_terminal"
+                  ? "失败"
+                  : "已完成";
+
+    return {
+      job,
+      processed,
+      total,
+      hasRemainingWork,
+      phase,
+      canPause: phase === "running",
+      canResume: phase === "paused_resumable" || phase === "failed_resumable",
+      canRestart: phase !== "running",
+      primaryAction,
+      statusLabel,
+    };
+  },
+});
+
+export const getSkillLatestVersionsBySlugsInternal = internalQuery({
+  args: {
+    slugs: v.array(v.string()),
+  },
+  handler: async (ctx, args): Promise<LocalSkillVersionSummary[]> => {
+    const uniqueSlugs = Array.from(
+      new Set(args.slugs.map((slug) => slug.trim().toLowerCase()).filter(Boolean)),
+    );
+    const summaries: LocalSkillVersionSummary[] = [];
+    for (const slug of uniqueSlugs) {
+      const skill = await ctx.db
+        .query("skills")
+        .withIndex("by_slug", (q) => q.eq("slug", slug))
+        .unique();
+      summaries.push({
+        slug,
+        version: skill?.latestVersionSummary?.version ?? null,
+      });
+    }
+    return summaries;
   },
 });
 
@@ -167,6 +280,7 @@ export const createClawhubSyncJobInternal = internalMutation({
 export const resumeClawhubSyncJobInternal = internalMutation({
   args: {
     jobId: v.id("clawhubSyncJobs"),
+    pageSize: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<ClawhubSyncJobDoc | null> => {
     const job = await ctx.db.get(args.jobId);
@@ -174,6 +288,8 @@ export const resumeClawhubSyncJobInternal = internalMutation({
     const now = Date.now();
     await ctx.db.patch(args.jobId, {
       status: "running",
+      pageSize: args.pageSize ?? job.pageSize,
+      hasMore: hasRemainingSyncWork(job),
       updatedAt: now,
       lastError: undefined,
       finishedAt: undefined,
@@ -191,7 +307,7 @@ export const updateClawhubSyncJobInternal = internalMutation({
     failedDelta: v.optional(v.number()),
     pageCountDelta: v.optional(v.number()),
     totalCount: v.optional(v.number()),
-    cursor: v.optional(v.string()),
+    cursor: v.optional(v.union(v.string(), v.null())),
     hasMore: v.optional(v.boolean()),
     lastError: v.optional(v.string()),
     recentFailure: v.optional(
@@ -217,7 +333,10 @@ export const updateClawhubSyncJobInternal = internalMutation({
       failedCount: job.failedCount + (args.failedDelta ?? 0),
       pageCount: job.pageCount + (args.pageCountDelta ?? 0),
       totalCount: args.totalCount ?? job.totalCount,
-      cursor: args.cursor,
+      cursor:
+        args.cursor === undefined
+          ? job.cursor
+          : args.cursor ?? undefined,
       hasMore: args.hasMore ?? job.hasMore,
       lastError: args.lastError,
       recentFailures,
@@ -293,7 +412,6 @@ export const pauseClawhubSyncJobInternal = internalMutation({
       lastError: args.reason ?? "Paused by user",
       finishedAt: now,
       updatedAt: now,
-      hasMore: false,
     });
     return (await ctx.db.get(args.jobId)) as ClawhubSyncJobDoc;
   },
@@ -321,6 +439,11 @@ export const triggerClawhubCatalogSync = action({
     }
 
     if (!job || job.status === "done") {
+      const normalizedPageSize = clampInt(
+        args.pageSize ?? DEFAULT_CLAWHUB_PAGE_SIZE,
+        MIN_CLAWHUB_PAGE_SIZE,
+        MAX_CLAWHUB_PAGE_SIZE,
+      );
       let totalCount = 0;
       try {
         totalCount = await fetchClawhubTotalCount(fetch);
@@ -331,7 +454,7 @@ export const triggerClawhubCatalogSync = action({
       job = (await ctx.runMutation(internal.clawhubSync.createClawhubSyncJobInternal, {
         startedByUserId: user._id,
         localUserId: await ctx.runMutation(internal.clawhubSync.ensureLocalTestUserInternal, {}),
-        pageSize: clampInt(args.pageSize ?? CLAWHUB_PAGE_SIZE, 1, MAX_IMPORT_BATCH_ITEMS),
+        pageSize: normalizedPageSize,
         sourceUrl: "https://clawhub.ai/skills?sort=downloads",
         totalCount,
       })) as ClawhubSyncJobDoc;
@@ -353,6 +476,11 @@ export const triggerClawhubCatalogSync = action({
 
       job = (await ctx.runMutation(internal.clawhubSync.resumeClawhubSyncJobInternal, {
         jobId: job._id,
+        pageSize: clampInt(
+          job.pageSize || DEFAULT_CLAWHUB_PAGE_SIZE,
+          MIN_CLAWHUB_PAGE_SIZE,
+          MAX_CLAWHUB_PAGE_SIZE,
+        ),
       })) as ClawhubSyncJobDoc | null;
       started = true;
     }
@@ -391,6 +519,66 @@ export const triggerClawhubCatalogSync = action({
   },
 });
 
+export const restartClawhubCatalogSync = action({
+  args: {
+    pageSize: v.optional(v.number()),
+  },
+  handler: async (ctx, args): Promise<SyncBatchResult & { started: true }> => {
+    const { user } = await requireUserFromAction(ctx);
+    assertAdmin(user);
+
+    const existing = (await ctx.runQuery(
+      internal.clawhubSync.getLatestClawhubSyncJobInternal,
+      {},
+    )) as ClawhubSyncJobDoc | null;
+
+    if (existing?.status === "running") {
+      await ctx.runMutation(internal.clawhubSync.pauseClawhubSyncJobInternal, {
+        jobId: existing._id,
+        reason: "Restarted from import page",
+      });
+    }
+
+    const normalizedPageSize = clampInt(
+      args.pageSize ?? DEFAULT_CLAWHUB_PAGE_SIZE,
+      MIN_CLAWHUB_PAGE_SIZE,
+      MAX_CLAWHUB_PAGE_SIZE,
+    );
+    let totalCount = 0;
+    try {
+      totalCount = await fetchClawhubTotalCount(fetch);
+    } catch (error) {
+      console.error("Failed to fetch ClawHub total count for restarted job:", error);
+    }
+
+    const job = (await ctx.runMutation(internal.clawhubSync.createClawhubSyncJobInternal, {
+      startedByUserId: user._id,
+      localUserId: await ctx.runMutation(internal.clawhubSync.ensureLocalTestUserInternal, {}),
+      pageSize: normalizedPageSize,
+      sourceUrl: "https://clawhub.ai/skills?sort=downloads",
+      totalCount,
+    })) as ClawhubSyncJobDoc;
+
+    await ctx.scheduler.runAfter(0, internal.clawhubSync.syncClawhubCatalogBatch, {
+      jobId: job._id,
+      cursor: job.cursor,
+      pageSize: job.pageSize,
+    });
+
+    return {
+      ok: true,
+      jobId: job._id,
+      pageCursor: job.cursor ?? null,
+      nextCursor: job.cursor ?? null,
+      hasMore: job.hasMore,
+      imported: job.importedCount,
+      skipped: job.skippedCount,
+      failed: [],
+      started: true,
+    };
+  },
+});
+
 export const pauseClawhubCatalogSync = action({
   args: {
     jobId: v.id("clawhubSyncJobs"),
@@ -407,6 +595,51 @@ export const pauseClawhubCatalogSync = action({
   },
 });
 
+export const inspectClawhubArchiveInternal = internalAction({
+  args: {
+    pageUrl: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const metadata = await resolveClawhubImportMetadata(args.pageUrl, fetch);
+    const response = await fetch(metadata.downloadZipUrl, {
+      method: "GET",
+      headers: { "User-Agent": "clawhub/clawhub-import" },
+    });
+    const contentLength = response.headers.get("content-length");
+    const contentType = response.headers.get("content-type");
+    const retryAfter = response.headers.get("retry-after");
+
+    if (!response.ok) {
+      return {
+        pageUrl: metadata.pageUrl,
+        canonicalUrl: metadata.canonicalUrl,
+        downloadZipUrl: metadata.downloadZipUrl,
+        slug: metadata.slug,
+        status: response.status,
+        contentLength,
+        contentType,
+        retryAfter,
+        ok: false,
+      };
+    }
+
+    const zipBytes = await downloadClawhubImportZip(metadata, fetch);
+    const archive = inspectZipArchive(zipBytes);
+    return {
+      pageUrl: metadata.pageUrl,
+      canonicalUrl: metadata.canonicalUrl,
+      downloadZipUrl: metadata.downloadZipUrl,
+      slug: metadata.slug,
+      status: response.status,
+      contentLength,
+      contentType,
+      retryAfter,
+      ok: true,
+      archive,
+    };
+  },
+});
+
 export const syncClawhubCatalogBatch = internalAction({
   args: {
     jobId: v.id("clawhubSyncJobs"),
@@ -414,7 +647,12 @@ export const syncClawhubCatalogBatch = internalAction({
     pageSize: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<SyncBatchResult> => {
-    const pageSize = clampInt(args.pageSize ?? CLAWHUB_PAGE_SIZE, 1, 100);
+    const pageSize = clampInt(
+      args.pageSize ?? DEFAULT_CLAWHUB_PAGE_SIZE,
+      MIN_CLAWHUB_PAGE_SIZE,
+      MAX_CLAWHUB_PAGE_SIZE,
+    );
+    const cursorState = parseSyncCursorState(args.cursor ?? null);
     const job = (await ctx.runQuery(internal.clawhubSync.getClawhubSyncJobByIdInternal, {
       jobId: args.jobId,
     })) as ClawhubSyncJobDoc | null;
@@ -451,10 +689,19 @@ export const syncClawhubCatalogBatch = internalAction({
     }
 
     try {
-      const catalogPage = await fetchClawhubCatalogPage(args.cursor ?? null, pageSize);
+      const catalogPage = await fetchClawhubCatalogPage(cursorState.pageCursor, pageSize);
       const page = catalogPage.value?.page ?? [];
       const nextCursor = catalogPage.value?.nextCursor ?? null;
       const hasMore = catalogPage.value?.hasMore ?? false;
+      const localVersionMap = new Map(
+        (
+          (await ctx.runQuery(internal.clawhubSync.getSkillLatestVersionsBySlugsInternal, {
+            slugs: page
+              .map((item) => item.skill?.slug?.trim().toLowerCase() ?? "")
+              .filter(Boolean),
+          })) as LocalSkillVersionSummary[]
+        ).map((entry) => [entry.slug, entry.version]),
+      );
 
       let imported = 0;
       let skipped = 0;
@@ -462,12 +709,8 @@ export const syncClawhubCatalogBatch = internalAction({
       let limitReached = false;
       const failed: Array<{ slug: string; reason: string }> = [];
 
-      for (const item of page) {
-        if (importedInThisBatch >= MAX_IMPORT_BATCH_ITEMS) {
-          limitReached = true;
-          break;
-        }
-
+      for (let index = cursorState.pageOffset; index < page.length; index += 1) {
+        const item = page[index];
         const currentJob = (await ctx.runQuery(internal.clawhubSync.getClawhubSyncJobByIdInternal, {
           jobId: args.jobId,
         })) as ClawhubSyncJobDoc | null;
@@ -493,20 +736,31 @@ export const syncClawhubCatalogBatch = internalAction({
         const skillSlug = item.skill?.slug?.trim().toLowerCase();
         if (!ownerHandle || !skillSlug) {
           skipped += 1;
+          await ctx.runMutation(internal.clawhubSync.updateClawhubSyncJobInternal, {
+            jobId: args.jobId,
+            skippedDelta: 1,
+            cursor: serializeSyncCursorState({
+              pageCursor: cursorState.pageCursor,
+              pageOffset: index + 1,
+            }),
+          });
           continue;
         }
 
         try {
-          // Fast Skip Check: if local version matches upstream, skip without downloading
-          const localSkill = (await ctx.runQuery(internal.skills.getSkillBySlugInternal, {
-            slug: skillSlug,
-          })) as Doc<"skills"> | null;
-
           const upstreamVersion = item.latestVersion?.version?.trim();
-          const localVersion = localSkill?.latestVersionSummary?.version;
+          const localVersion = localVersionMap.get(skillSlug) ?? null;
 
           if (upstreamVersion && localVersion && upstreamVersion === localVersion) {
             skipped += 1;
+            await ctx.runMutation(internal.clawhubSync.updateClawhubSyncJobInternal, {
+              jobId: args.jobId,
+              skippedDelta: 1,
+              cursor: serializeSyncCursorState({
+                pageCursor: cursorState.pageCursor,
+                pageOffset: index + 1,
+              }),
+            });
             continue;
           }
 
@@ -524,32 +778,79 @@ export const syncClawhubCatalogBatch = internalAction({
           if (result === "imported") {
             imported += 1;
             importedInThisBatch += 1;
+            await ctx.runMutation(internal.clawhubSync.updateClawhubSyncJobInternal, {
+              jobId: args.jobId,
+              importedDelta: 1,
+              cursor: serializeSyncCursorState({
+                pageCursor: cursorState.pageCursor,
+                pageOffset: index + 1,
+              }),
+              lastError: undefined,
+            });
+            if (importedInThisBatch >= MAX_IMPORT_BATCH_ITEMS) {
+              limitReached = index + 1 < page.length;
+              break;
+            }
           } else {
             skipped += 1;
+            await ctx.runMutation(internal.clawhubSync.updateClawhubSyncJobInternal, {
+              jobId: args.jobId,
+              skippedDelta: 1,
+              cursor: serializeSyncCursorState({
+                pageCursor: cursorState.pageCursor,
+                pageOffset: index + 1,
+              }),
+              lastError: undefined,
+            });
           }
         } catch (error) {
           console.error(`Failed to sync skill ${ownerHandle}/${skillSlug}:`, error);
+          const reason = toErrorMessage(error);
+          const shouldSkip = shouldSkipSyncError(reason);
           failed.push({
             slug: skillSlug,
-            reason: String(error),
+            reason,
+          });
+          await ctx.runMutation(internal.clawhubSync.updateClawhubSyncJobInternal, {
+            jobId: args.jobId,
+            skippedDelta: shouldSkip ? 1 : undefined,
+            failedDelta: shouldSkip ? undefined : 1,
+            cursor: serializeSyncCursorState({
+              pageCursor: cursorState.pageCursor,
+              pageOffset: index + 1,
+            }),
+            lastError: reason,
+            recentFailure: {
+              slug: skillSlug,
+              reason,
+              at: Date.now(),
+            },
           });
         }
       }
 
-      // If we reached the import limit mid-page, we MUST re-schedule the SAME cursor
-      // to continue processing the rest of this page in the next action.
       const shouldResumeSamePage = limitReached;
-      const effectiveNextCursor = shouldResumeSamePage ? args.cursor : nextCursor;
-      const effectiveHasMore = shouldResumeSamePage ? true : hasMore;
+      const nextState = shouldResumeSamePage
+        ? serializeSyncCursorState({
+            pageCursor: cursorState.pageCursor,
+            pageOffset: Math.min(page.length, cursorState.pageOffset + imported + skipped + failed.length),
+          })
+        : hasMore
+          ? serializeSyncCursorState({
+              pageCursor: nextCursor,
+              pageOffset: 0,
+            })
+          : null;
+      const effectiveHasMore = shouldResumeSamePage || hasMore;
 
       await ctx.runMutation(internal.clawhubSync.updateClawhubSyncJobInternal, {
         jobId: args.jobId,
-        importedDelta: imported,
-        skippedDelta: skipped,
         pageCountDelta: shouldResumeSamePage ? 0 : 1,
-        cursor: effectiveHasMore ? (effectiveNextCursor ?? undefined) : undefined,
+        cursor: nextState,
         hasMore: effectiveHasMore,
-        totalCount: !effectiveHasMore ? job.importedCount + imported + job.skippedCount + skipped + job.failedCount + failed.length : undefined,
+        totalCount: !effectiveHasMore
+          ? job.importedCount + job.skippedCount + job.failedCount + imported + skipped + failed.length
+          : undefined,
         lastError: failed.length ? `Completed with ${failed.length} failed item(s)` : undefined,
       });
 
@@ -560,7 +861,7 @@ export const syncClawhubCatalogBatch = internalAction({
         if (latestJob && latestJob.status === "running") {
           await ctx.scheduler.runAfter(0, internal.clawhubSync.syncClawhubCatalogBatch, {
             jobId: args.jobId,
-            cursor: effectiveNextCursor ?? undefined,
+            cursor: nextState ?? undefined,
             pageSize,
           });
         }
@@ -575,8 +876,8 @@ export const syncClawhubCatalogBatch = internalAction({
       return {
         ok: true,
         jobId: args.jobId,
-        pageCursor: args.cursor ?? null,
-        nextCursor: effectiveNextCursor ?? null,
+        pageCursor: cursorState.pageCursor,
+        nextCursor: shouldResumeSamePage ? cursorState.pageCursor : nextCursor,
         hasMore: effectiveHasMore,
         imported,
         skipped,
@@ -630,7 +931,7 @@ async function syncClawhubSkillPage(
     } | null;
   },
 ) {
-  const resolved = await resolveClawhubImportPage(params.pageUrl, fetch);
+  const metadata = await resolveClawhubImportMetadata(params.pageUrl, fetch);
   const targetSlug = await resolveMirrorSlug(ctx, {
     localUserId: params.localUserId,
     ownerHandle: params.ownerHandle,
@@ -645,10 +946,33 @@ async function syncClawhubSkillPage(
     })
     : null;
 
-  let zipBytes: Uint8Array | null = resolved.zipBytes;
-  const canonicalUrl = resolved.canonicalUrl;
+  let zipBytes: Uint8Array | null = await downloadClawhubImportZip(metadata, fetch);
+  const canonicalUrl = metadata.canonicalUrl;
+  
+  const inspection = inspectZipArchive(zipBytes);
+  const isHeavy = inspection.exceedsLimits;
+  let entries: Record<string, Uint8Array> | null = null;
 
-  let entries: Record<string, Uint8Array> | null = stripGitHubZipRoot(unzipToEntries(zipBytes));
+  if (isHeavy) {
+    console.warn(`Skill ${params.upstreamSlug} is too heavy, using Hybrid Sync Mode.`);
+    // Only extract metadata files
+    entries = stripGitHubZipRoot(selectiveUnzipInAction(zipBytes, (path) => {
+      const lower = path.toLowerCase();
+      return (
+        lower.endsWith("/skill.md") ||
+        lower.endsWith("/skills.md") ||
+        lower === "skill.md" ||
+        lower === "skills.md" ||
+        lower.endsWith("/package.json") ||
+        lower === "package.json"
+      );
+    }));
+    // Also include the original archive itself as a special file
+    entries["_archive.zip"] = zipBytes;
+  } else {
+    entries = stripGitHubZipRoot(unzipToEntries(zipBytes));
+  }
+
   // Free zipBytes as we now have entries
   zipBytes = null;
 
@@ -663,6 +987,12 @@ async function syncClawhubSkillPage(
   const selectedPaths = selectClawhubImportPaths({ candidate, files, fileBytes });
   if (selectedPaths.length === 0) {
     throw new ConvexError("No files selected");
+  }
+
+  // Handle _archive.zip specifically if in heavy mode
+  if (isHeavy && entries["_archive.zip"]) {
+    selectedPaths.push("_archive.zip");
+    fileBytes.set("_archive.zip", entries["_archive.zip"]);
   }
 
   let storedFiles: Array<{
@@ -691,15 +1021,16 @@ async function syncClawhubSkillPage(
     if (!sanitized) throw new ConvexError("Invalid file paths");
 
     const sha256 = await sha256Hex(bytes);
+    const contentType = path.toLowerCase().endsWith(".zip") ? "application/zip" : "text/plain";
     const storageId = await ctx.storage.store(new Blob([new Uint8Array(bytes)], {
-      type: "text/plain",
+      type: contentType,
     }));
     storedFiles?.push({
       path: sanitized,
       size: bytes.byteLength,
       storageId,
       sha256,
-      contentType: "text/plain",
+      contentType,
     });
   }
 
@@ -813,6 +1144,10 @@ function unzipToEntries(zipBytes: Uint8Array) {
   return unzipToEntriesShared(zipBytes, unzipSync);
 }
 
+function selectiveUnzipInAction(zipBytes: Uint8Array, matchFn: (path: string) => boolean) {
+  return selectiveUnzipShared(zipBytes, matchFn);
+}
+
 async function fetchClawhubCatalogPage(cursor: string | null, numItems: number) {
   const args: Record<string, unknown> = {
     dir: "desc",
@@ -873,6 +1208,51 @@ function normalizeSlug(value: string) {
 
 function clampInt(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, Math.floor(value)));
+}
+
+function shouldSkipSyncError(reason: string) {
+  const normalized = reason.toLowerCase();
+  return (
+    normalized.includes("rate limited (429)") ||
+    normalized.includes("rate limit exceeded") ||
+    normalized.includes("archive is too large") ||
+    normalized.includes("repo archive is too large") ||
+    normalized.includes("repo archive has too many files") ||
+    normalized.includes("selected files exceed 50mb limit")
+  );
+}
+
+function parseSyncCursorState(raw: string | null): SyncCursorState {
+  if (!raw) {
+    return { pageCursor: null, pageOffset: 0 };
+  }
+  try {
+    const parsed = JSON.parse(raw) as Partial<SyncCursorState>;
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "pageOffset" in parsed
+    ) {
+      return {
+        pageCursor:
+          typeof parsed.pageCursor === "string" ? parsed.pageCursor : null,
+        pageOffset:
+          typeof parsed.pageOffset === "number" && parsed.pageOffset > 0
+            ? Math.floor(parsed.pageOffset)
+            : 0,
+      };
+    }
+  } catch {
+    // Backward compatibility for old jobs that stored the upstream cursor directly.
+  }
+  return { pageCursor: raw, pageOffset: 0 };
+}
+
+function serializeSyncCursorState(state: SyncCursorState) {
+  return JSON.stringify({
+    pageCursor: state.pageCursor,
+    pageOffset: Math.max(0, Math.floor(state.pageOffset)),
+  });
 }
 
 async function fetchClawhubTotalCount(fetcher: typeof fetch) {
