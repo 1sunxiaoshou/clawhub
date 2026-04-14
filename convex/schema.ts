@@ -1328,6 +1328,7 @@ const clawhubSyncJobs = defineTable({
     v.literal("done"),
   ),
   pageSize: v.number(),
+  downloadBaseUrl: v.optional(v.string()),
   cursor: v.optional(v.string()),
   hasMore: v.boolean(),
   totalCount: v.optional(v.number()),

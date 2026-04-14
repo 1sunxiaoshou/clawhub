@@ -1,4 +1,5 @@
 import { ConvexError } from "convex/values";
+import { CLAWHUB_CONVEX_QUERY_URL } from "./clawhubSyncConfig";
 import { fetchClawhubZipBytes } from "./zipUtils";
 
 export type ClawhubImportUrl = {
@@ -14,6 +15,10 @@ export type ClawhubImportResolved = {
 };
 
 export type ClawhubImportMetadata = Omit<ClawhubImportResolved, "zipBytes">;
+
+type ResolveClawhubImportMetadataOptions = {
+  downloadBaseUrl?: string;
+};
 
 export function parseClawhubImportUrl(input: string): ClawhubImportUrl {
   const originalUrl = input.trim();
@@ -48,6 +53,62 @@ export function extractClawhubDownloadZipUrl(html: string, pageUrl: string) {
   throw new ConvexError("Could not find a download zip link on the ClawHub page");
 }
 
+export function buildDirectClawhubDownloadZipUrl(slug: string) {
+  return buildDirectClawhubDownloadZipUrlWithBase(slug);
+}
+
+export function buildDirectClawhubDownloadZipUrlWithBase(slug: string, downloadBaseUrl?: string) {
+  const normalizedSlug = slug.trim().toLowerCase();
+  if (!normalizedSlug) throw new ConvexError("Could not determine ClawHub slug from URL");
+  const queryUrl = downloadBaseUrl
+    ? new URL(downloadBaseUrl)
+    : new URL(CLAWHUB_CONVEX_QUERY_URL);
+  if (!downloadBaseUrl) {
+    queryUrl.hostname = queryUrl.hostname.replace(/\.convex\.cloud$/i, ".convex.site");
+  }
+  queryUrl.pathname = "/api/v1/download";
+  queryUrl.search = "";
+  queryUrl.searchParams.set("slug", normalizedSlug);
+  return queryUrl.toString();
+}
+
+export async function resolveClawhubDownloadBaseUrl(pageUrl: string, fetcher: typeof fetch) {
+  const parsed = parseClawhubImportUrl(pageUrl);
+  try {
+    const response = await fetcher(parsed.originalUrl, {
+      headers: { "User-Agent": "clawhub/clawhub-import" },
+    });
+    if (response.ok) {
+      const html = await response.text();
+      const hrefs = Array.from(
+        html.matchAll(/<a\b[^>]*href=(["'])([^"']+)\1[^>]*>/gi),
+        (match) => match[2]?.trim(),
+      ).filter((href): href is string => Boolean(href));
+      for (const href of hrefs) {
+        const absoluteUrl = new URL(href, parsed.originalUrl);
+        if (
+          absoluteUrl.pathname.toLowerCase().endsWith("/api/v1/download") &&
+          absoluteUrl.searchParams.has("slug")
+        ) {
+          absoluteUrl.pathname = "/";
+          absoluteUrl.search = "";
+          absoluteUrl.hash = "";
+          return absoluteUrl.toString().replace(/\/$/, "");
+        }
+      }
+    }
+  } catch {
+    // Fall back to the derived deployment URL below.
+  }
+
+  const queryUrl = new URL(CLAWHUB_CONVEX_QUERY_URL);
+  queryUrl.hostname = queryUrl.hostname.replace(/\.convex\.cloud$/i, ".convex.site");
+  queryUrl.pathname = "/";
+  queryUrl.search = "";
+  queryUrl.hash = "";
+  return queryUrl.toString().replace(/\/$/, "");
+}
+
 export async function resolveClawhubImportPage(pageUrl: string, fetcher: typeof fetch) {
   const metadata = await resolveClawhubImportMetadata(pageUrl, fetcher);
   const zipBytes = await downloadClawhubImportZip(metadata, fetcher);
@@ -58,17 +119,16 @@ export async function resolveClawhubImportPage(pageUrl: string, fetcher: typeof 
   } satisfies ClawhubImportResolved;
 }
 
-export async function resolveClawhubImportMetadata(pageUrl: string, fetcher: typeof fetch) {
+export async function resolveClawhubImportMetadata(
+  pageUrl: string,
+  fetcher: typeof fetch,
+  options: ResolveClawhubImportMetadataOptions = {},
+) {
+  void fetcher;
   const parsed = parseClawhubImportUrl(pageUrl);
-  const response = await fetcher(parsed.originalUrl, {
-    headers: { "User-Agent": "clawhub/clawhub-import" },
-  });
-  if (!response.ok) throw new ConvexError("ClawHub page fetch failed");
-
-  const html = await response.text();
-  const canonicalUrl = extractCanonicalUrl(html, parsed.originalUrl) ?? parsed.originalUrl;
-  const downloadZipUrl = extractClawhubDownloadZipUrl(html, canonicalUrl);
+  const canonicalUrl = normalizeClawhubPageUrl(parsed.originalUrl);
   const slug = getSlugFromClawhubUrl(canonicalUrl);
+  const downloadZipUrl = buildDirectClawhubDownloadZipUrlWithBase(slug, options.downloadBaseUrl);
 
   return {
     pageUrl: parsed.originalUrl,
@@ -85,13 +145,11 @@ export async function downloadClawhubImportZip(
   return await fetchClawhubZipBytes(metadata.downloadZipUrl, fetcher);
 }
 
-function extractCanonicalUrl(html: string, pageUrl: string) {
-  const canonical = html.match(
-    /<link\b[^>]*rel=(["'])canonical\1[^>]*href=(["'])([^"']+)\2[^>]*>/i,
-  );
-  const href = canonical?.[3]?.trim();
-  if (!href) return null;
-  return new URL(href, pageUrl).toString();
+function normalizeClawhubPageUrl(pageUrl: string) {
+  const url = new URL(pageUrl);
+  url.search = "";
+  url.hash = "";
+  return url.toString();
 }
 
 function getSlugFromClawhubUrl(pageUrl: string) {

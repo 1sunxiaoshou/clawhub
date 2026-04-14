@@ -10,5 +10,6 @@ export const MAX_CLAWHUB_PAGE_SIZE = 100;
 // Heavy imports still decode archives and publish versions, so keep the
 // per-action import count small even when the fetched catalog page is larger.
 export const MAX_IMPORT_BATCH_ITEMS = 4;
+export const MAX_IMPORT_CONCURRENCY = 2;
 
 export const FETCH_TIMEOUT_MS = 60_000;

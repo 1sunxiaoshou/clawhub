@@ -92,6 +92,24 @@ export const Route = createRootRoute({
           rel: "stylesheet",
           href: appCss,
         },
+        {
+          rel: "icon",
+          type: "image/png",
+          href: "/deepdata-logo.png",
+        },
+        {
+          rel: "shortcut icon",
+          type: "image/png",
+          href: "/deepdata-logo.png",
+        },
+        {
+          rel: "apple-touch-icon",
+          href: "/deepdata-logo.png",
+        },
+        {
+          rel: "manifest",
+          href: "/manifest.json",
+        },
       ],
     };
   },

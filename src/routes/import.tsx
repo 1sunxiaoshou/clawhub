@@ -17,7 +17,40 @@ import { isAdmin } from "../lib/roles";
 import { useAuthStatus } from "../lib/useAuthStatus";
 import { formatBytes } from "./upload/-utils";
 
-const EMPTY_FILES: any[] = [];
+type ImportPreviewFile = {
+  path: string;
+  size: number;
+  defaultSelected: boolean;
+};
+
+type ImportCandidate = {
+  path: string;
+  readmePath?: string | null;
+  name?: string | null;
+  description?: string | null;
+};
+
+type ImportPreview = {
+  resolved: {
+    originalUrl: string;
+    commit: string;
+  };
+  candidates: ImportCandidate[];
+};
+
+type ImportCandidatePreview = {
+  candidate?: ImportCandidate | null;
+  defaults?: {
+    selectedPaths?: string[];
+    slug?: string;
+    displayName?: string;
+    version?: string;
+    tags?: string[];
+  } | null;
+  files: ImportPreviewFile[];
+};
+
+const EMPTY_FILES: ImportPreviewFile[] = [];
 
 export const Route = createFileRoute("/import")({
   component: GithubImport,
@@ -208,8 +241,8 @@ export function GithubImport() {
   const { isAuthenticated, me } = useAuthStatus();
   const [url, setUrl] = useState("");
   const [isDetecting, setIsDetecting] = useState(false);
-  const [preview, setPreview] = useState<any>(null);
-  const [candidatePreview, setCandidatePreview] = useState<any>(null);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [candidatePreview, setCandidatePreview] = useState<ImportCandidatePreview | null>(null);
   const [isPreviewingCandidate, setIsPreviewingCandidate] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -237,7 +270,7 @@ export function GithubImport() {
       setSlug(selectedPreview.defaults?.slug || "");
       setDisplayName(selectedPreview.defaults?.displayName || "");
       setVersion(selectedPreview.defaults?.version || "1.0.0");
-      setSelectedFilePaths(new Set(selectedPreviewFiles.map((f: any) => f.path)));
+      setSelectedFilePaths(new Set(selectedPreviewFiles.map((file) => file.path)));
     }
   }, [selectedPreview, selectedPreviewFiles]);
 
@@ -298,7 +331,7 @@ export function GithubImport() {
 
   const selectAll = () => {
     if (!selectedPreview) return;
-    setSelectedFilePaths(new Set(selectedPreviewFiles.map((f: any) => f.path)));
+    setSelectedFilePaths(new Set(selectedPreviewFiles.map((file) => file.path)));
   };
 
   const clearAll = () => {
@@ -314,7 +347,7 @@ export function GithubImport() {
 
   const applyDefaultSelection = () => {
     if (!selectedPreview) return;
-    setSelectedFilePaths(new Set(selectedPreviewFiles.map((f: any) => f.path)));
+    setSelectedFilePaths(new Set(selectedPreviewFiles.map((file) => file.path)));
   };
 
   const handleImport = async () => {
@@ -328,7 +361,7 @@ export function GithubImport() {
         slug,
         displayName,
         version,
-        tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+        tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
         selectedPaths: Array.from(selectedFilePaths),
       });
       toast.success(t("import.imported"));
@@ -362,8 +395,8 @@ export function GithubImport() {
   const selectedCount = selectedFilePaths.size;
   const selectedBytes =
     selectedPreviewFiles
-      ?.filter((f: any) => selectedFilePaths.has(f.path))
-      .reduce((acc: number, f: any) => acc + f.size, 0) || 0;
+      .filter((file) => selectedFilePaths.has(file.path))
+      .reduce((acc, file) => acc + file.size, 0);
 
   return (
     <main className="py-10">
@@ -444,9 +477,9 @@ export function GithubImport() {
                   {t("import.foundSkills", { count: preview.candidates.length })}
                 </h2>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {preview.candidates.map((s: any, i: number) => (
+                  {preview.candidates.map((candidate, i) => (
                     <button
-                      key={s.path}
+                      key={candidate.path}
                       type="button"
                       onClick={() => setSelectedSkillIndex(i)}
                       className={`flex flex-col items-start gap-1 rounded-[var(--radius-md)] border p-4 text-left transition-all ${selectedSkillIndex === i
@@ -455,10 +488,10 @@ export function GithubImport() {
                         }`}
                     >
                       <span className="font-bold text-[color:var(--ink)]">
-                        {s.name || s.path}
+                        {candidate.name || candidate.path}
                       </span>
                       <span className="font-mono text-xs text-[color:var(--ink-soft)]">
-                        {s.path === "." ? "root" : s.path}
+                        {candidate.path === "." ? "root" : candidate.path}
                       </span>
                     </button>
                   ))}
@@ -580,7 +613,7 @@ export function GithubImport() {
                       </p>
 
                       <div className="mt-6 max-h-[400px] overflow-y-auto rounded-lg border border-[color:var(--line)] bg-[color:var(--surface-muted)]">
-                        {selectedPreviewFiles.map((file: any) => (
+                        {selectedPreviewFiles.map((file) => (
                           <div
                             key={file.path}
                             className="flex items-center gap-3 border-b border-[color:var(--line)] px-4 py-2 last:border-0"

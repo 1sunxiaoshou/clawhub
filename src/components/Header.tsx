@@ -1,6 +1,7 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { Link } from "@tanstack/react-router";
-import { Languages, Menu, Monitor, Moon, Plus, Search, Sun } from "lucide-react";
+import { useLocation } from "@tanstack/react-router";
+import { Languages, Menu, Monitor, Moon, Plus, Sun } from "lucide-react";
 import { useMemo, useRef } from "react";
 import { gravatarUrl } from "../lib/gravatar";
 import { useI18n } from "../lib/i18n";
@@ -29,9 +30,11 @@ export default function Header() {
   const { mode, setMode } = useThemeMode();
   const { locale, setLocale, t } = useI18n();
   const toggleRef = useRef<HTMLDivElement | null>(null);
+  const location = useLocation();
   const siteMode = getSiteMode();
   const siteName = useMemo(() => getSiteName(siteMode), [siteMode]);
   const isSoulMode = siteMode === "souls";
+  const isHomePage = location.pathname === "/";
   const clawHubUrl = getClawHubSiteUrl();
 
   const avatar = me?.image ?? (me?.email ? gravatarUrl(me.email) : undefined);
@@ -106,34 +109,6 @@ export default function Header() {
           {t("header.plugins")}
         </Link>
       )}
-      <Link
-        to={isSoulMode ? "/souls" : "/skills"}
-        search={
-          isSoulMode
-            ? { q: undefined, sort: undefined, dir: undefined, view: undefined, focus: "search" }
-            : {
-                q: undefined,
-                sort: undefined,
-                dir: undefined,
-                highlighted: undefined,
-                nonSuspicious: undefined,
-                view: undefined,
-                focus: "search",
-              }
-        }
-        className="text-[color:var(--ink-soft)] font-semibold text-sm transition-colors duration-150 hover:text-[color:var(--ink)] inline-flex items-center gap-1.5"
-      >
-        <Search className="h-3.5 w-3.5" />
-        {t("header.search")}
-      </Link>
-      {isSoulMode ? null : (
-        <Link
-          to="/about"
-          className="text-[color:var(--ink-soft)] font-semibold text-sm transition-colors duration-150 hover:text-[color:var(--ink)]"
-        >
-          {t("header.about")}
-        </Link>
-      )}
       {me ? (
         <Link
           to="/stars"
@@ -142,7 +117,15 @@ export default function Header() {
           {t("header.stars")}
         </Link>
       ) : null}
-      {isStaff ? (
+      {!isHomePage && isStaff ? (
+        <Link
+          to="/import"
+          className="text-[color:var(--ink-soft)] font-semibold text-sm transition-colors duration-150 hover:text-[color:var(--ink)]"
+        >
+          {t("header.import")}
+        </Link>
+      ) : null}
+      {!isHomePage && isStaff ? (
         <Link
           to="/management"
           search={{ skill: undefined }}
@@ -155,7 +138,7 @@ export default function Header() {
   );
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[color:var(--line)] bg-[color:var(--nav-bg)] backdrop-blur-xl">
+    <header className={`sticky top-0 z-50 border-b border-[color:var(--line)] bg-[color:var(--nav-bg)] backdrop-blur-xl ${isHomePage ? "home-header" : ""}`}>
       <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between gap-4 px-5">
         {/* Brand */}
         <Link
@@ -163,19 +146,19 @@ export default function Header() {
           search={{ q: undefined, highlighted: undefined, search: undefined }}
           className="flex items-center gap-2.5 font-display text-lg font-bold text-[color:var(--ink)] no-underline transition-opacity hover:opacity-80"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--accent)] to-[color:var(--accent-deep)] p-0.5">
+          <span className="flex h-9 w-9 items-center justify-center">
             <img
-              src="/clawd-logo.png"
+              src="/deepdata-logo.png"
               alt=""
               aria-hidden="true"
-              className="h-full w-full rounded-full object-cover"
+              className="h-full w-full object-contain"
             />
           </span>
           <span>{siteName}</span>
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden items-center gap-6 md:flex">{navLinks}</nav>
+        <nav className={`hidden items-center gap-6 md:flex ${isHomePage ? "home-header-nav" : ""}`}>{navLinks}</nav>
 
         {/* Actions */}
         <div className="flex items-center gap-3">

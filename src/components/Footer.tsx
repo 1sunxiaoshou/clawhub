@@ -12,6 +12,7 @@ export function Footer() {
         <Separator className="mb-6" />
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.82rem] text-[color:var(--ink-soft)]">
           <span className="font-semibold text-[color:var(--ink)]">{siteName}</span>
+          <FooterLink href="https://clawhub.ai">ClawHub</FooterLink>
           <FooterLink href="https://openclaw.ai">OpenClaw</FooterLink>
           <FooterLink href="https://vercel.com">Vercel</FooterLink>
           <FooterLink href="https://www.convex.dev">Convex</FooterLink>

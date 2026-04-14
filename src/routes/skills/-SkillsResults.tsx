@@ -68,17 +68,17 @@ export function SkillsResults({
                 platformLabels={platforms.length ? platforms : undefined}
                 summaryFallback={t("skills.fallbackSummary")}
                 meta={
-                  <>
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                     <UserBadge
                       user={entry.owner}
                       fallbackHandle={ownerHandle}
                       prefix={t("common.by")}
                       link={false}
                     />
-                    <span className="text-[0.8rem] text-[color:var(--ink-soft)]">
+                    <span className="inline-flex items-center whitespace-nowrap text-[0.8rem] text-[color:var(--ink-soft)]">
                       <SkillStatsTripletLine stats={skill.stats} />
                     </span>
-                  </>
+                  </div>
                 }
               />
             );

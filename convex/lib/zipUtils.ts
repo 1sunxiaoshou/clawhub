@@ -12,30 +12,41 @@ export const MAX_SINGLE_FILE_BYTES = 10 * 1024 * 1024;
 export const MAX_ARCHIVE_MEMORY_BUDGET_BYTES = 48 * 1024 * 1024;
 const MAX_DOWNLOAD_RETRIES = 3;
 const BASE_RETRY_DELAY_MS = 1_500;
+const DOWNLOAD_TTFB_TIMEOUT_MS = 180_000;
 
 /* ─── ZIP download ────────────────────────────────────────────────── */
 
 export async function fetchClawhubZipBytes(downloadZipUrl: string, fetcher: typeof fetch) {
   let lastStatus = 0;
   let lastBody = "";
+  let lastError: unknown = null;
 
   for (let attempt = 0; attempt <= MAX_DOWNLOAD_RETRIES; attempt += 1) {
-    const response = await fetcher(downloadZipUrl, {
-      headers: { "User-Agent": "clawhub/clawhub-import" },
-    });
+    let retryResponse: Response | null = null;
+    try {
+      const response = await fetchWithTimeout(fetcher, downloadZipUrl, {
+        headers: { "User-Agent": "clawhub/clawhub-import" },
+      });
+      retryResponse = response;
 
-    if (response.ok) {
-      return await readLimitedBytes(response, MAX_REMOTE_ZIP_BYTES);
+      if (response.ok) {
+        return await readLimitedBytes(response, MAX_REMOTE_ZIP_BYTES);
+      }
+
+      lastStatus = response.status;
+      lastBody = await response.text().catch(() => "");
+
+      if (!shouldRetryDownload(response.status) || attempt === MAX_DOWNLOAD_RETRIES) {
+        break;
+      }
+    } catch (error) {
+      lastError = error;
+      if (!shouldRetryDownloadError(error) || attempt === MAX_DOWNLOAD_RETRIES) {
+        break;
+      }
     }
 
-    lastStatus = response.status;
-    lastBody = await response.text().catch(() => "");
-
-    if (!shouldRetryDownload(response.status) || attempt === MAX_DOWNLOAD_RETRIES) {
-      break;
-    }
-
-    await delay(getRetryDelayMs(response, attempt));
+    await delay(getRetryDelayMs(retryResponse, attempt));
   }
 
   if (lastStatus === 429) {
@@ -43,7 +54,23 @@ export async function fetchClawhubZipBytes(downloadZipUrl: string, fetcher: type
       `ClawHub archive download rate limited (429): ${lastBody || "Rate limit exceeded"}`,
     );
   }
+  if (lastError) {
+    throw new ConvexError(`ClawHub archive download failed: ${toDownloadErrorMessage(lastError)}`);
+  }
   throw new ConvexError(`ClawHub archive download failed: ${lastStatus || "unknown"}`);
+}
+
+async function fetchWithTimeout(fetcher: typeof fetch, url: string, init: RequestInit) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DOWNLOAD_TTFB_TIMEOUT_MS);
+  try {
+    return await fetcher(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export async function readLimitedBytes(response: Response, maxBytes: number) {
@@ -261,15 +288,41 @@ function shouldRetryDownload(status: number) {
   return status === 429 || status === 503;
 }
 
-function getRetryDelayMs(response: Response, attempt: number) {
-  const retryAfter = response.headers.get("retry-after");
-  if (retryAfter) {
-    const seconds = Number.parseFloat(retryAfter);
-    if (Number.isFinite(seconds) && seconds > 0) {
-      return Math.ceil(seconds * 1_000);
+function shouldRetryDownloadError(error: unknown) {
+  const message = toDownloadErrorMessage(error).toLowerCase();
+  return (
+    message.includes("timed out") ||
+    message.includes("timeout") ||
+    message.includes("connection reset") ||
+    message.includes("socket hang up") ||
+    message.includes("fetch failed") ||
+    message.includes("network") ||
+    message.includes("econnreset") ||
+    message.includes("und_err")
+  );
+}
+
+function getRetryDelayMs(response: Response | null, attempt: number) {
+  if (response) {
+    const retryAfter = response.headers.get("retry-after");
+    if (retryAfter) {
+      const seconds = Number.parseFloat(retryAfter);
+      if (Number.isFinite(seconds) && seconds > 0) {
+        return Math.ceil(seconds * 1_000);
+      }
     }
   }
   return BASE_RETRY_DELAY_MS * (attempt + 1);
+}
+
+function toDownloadErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    if (error.name === "AbortError") {
+      return `timed out after ${Math.floor(DOWNLOAD_TTFB_TIMEOUT_MS / 1000)}s waiting for download`;
+    }
+    return error.message;
+  }
+  return String(error);
 }
 
 function delay(ms: number) {

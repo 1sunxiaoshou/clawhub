@@ -21,6 +21,8 @@ import { getSkillBadges } from "../../lib/badges";
 import { useI18n } from "../../lib/i18n";
 import type { PublicSkill, PublicUser } from "../../lib/publicUser";
 
+type TranslationFn = ReturnType<typeof useI18n>["t"];
+
 export const Route = createFileRoute("/u/$handle")({
   component: UserProfile,
 });
@@ -158,7 +160,7 @@ function PublishedAndStarred({
   isLoadingPublished: boolean;
   skills: PublicSkill[];
   isLoadingSkills: boolean;
-  t: (key: string) => string;
+  t: TranslationFn;
 }) {
   return (
     <div className="flex flex-col gap-8">
@@ -227,7 +229,7 @@ function InstalledSection(props: {
   includeRemoved: boolean;
   onToggleRemoved: () => void;
   data: TelemetryResponse | null | undefined;
-  t: (key: string, params?: any) => string;
+  t: TranslationFn;
   formatDateTime: (date: number | Date) => string;
 }) {
   const clearTelemetry = useMutation(api.telemetry.clearMyTelemetry);

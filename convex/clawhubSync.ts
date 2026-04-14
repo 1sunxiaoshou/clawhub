@@ -16,6 +16,7 @@ import {
 } from "./lib/githubImport";
 import {
   downloadClawhubImportZip,
+  resolveClawhubDownloadBaseUrl,
   resolveClawhubImportMetadata,
 } from "./lib/clawhubImport";
 import {
@@ -24,6 +25,7 @@ import {
   FETCH_TIMEOUT_MS,
   MAX_CLAWHUB_PAGE_SIZE,
   MAX_IMPORT_BATCH_ITEMS,
+  MAX_IMPORT_CONCURRENCY,
   MIN_CLAWHUB_PAGE_SIZE,
 } from "./lib/clawhubSyncConfig";
 import { publishVersionForUser } from "./lib/skillPublish";
@@ -83,6 +85,7 @@ type ClawhubSyncJobDoc = {
   localUserId: Id<"users">;
   status: "running" | "failed" | "paused" | "done";
   pageSize: number;
+  downloadBaseUrl?: string;
   cursor?: string;
   hasMore: boolean;
   totalCount?: number;
@@ -249,6 +252,7 @@ export const createClawhubSyncJobInternal = internalMutation({
     startedByUserId: v.id("users"),
     localUserId: v.id("users"),
     pageSize: v.number(),
+    downloadBaseUrl: v.optional(v.string()),
     sourceUrl: v.string(),
     totalCount: v.optional(v.number()),
   },
@@ -261,6 +265,7 @@ export const createClawhubSyncJobInternal = internalMutation({
       localUserId: args.localUserId,
       status: "running",
       pageSize: args.pageSize,
+      downloadBaseUrl: args.downloadBaseUrl,
       totalCount: args.totalCount ?? 0,
       cursor: undefined,
       hasMore: true,
@@ -281,6 +286,7 @@ export const resumeClawhubSyncJobInternal = internalMutation({
   args: {
     jobId: v.id("clawhubSyncJobs"),
     pageSize: v.optional(v.number()),
+    downloadBaseUrl: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<ClawhubSyncJobDoc | null> => {
     const job = await ctx.db.get(args.jobId);
@@ -289,6 +295,7 @@ export const resumeClawhubSyncJobInternal = internalMutation({
     await ctx.db.patch(args.jobId, {
       status: "running",
       pageSize: args.pageSize ?? job.pageSize,
+      downloadBaseUrl: args.downloadBaseUrl ?? job.downloadBaseUrl,
       hasMore: hasRemainingSyncWork(job),
       updatedAt: now,
       lastError: undefined,
@@ -307,6 +314,7 @@ export const updateClawhubSyncJobInternal = internalMutation({
     failedDelta: v.optional(v.number()),
     pageCountDelta: v.optional(v.number()),
     totalCount: v.optional(v.number()),
+    downloadBaseUrl: v.optional(v.union(v.string(), v.null())),
     cursor: v.optional(v.union(v.string(), v.null())),
     hasMore: v.optional(v.boolean()),
     lastError: v.optional(v.string()),
@@ -333,6 +341,10 @@ export const updateClawhubSyncJobInternal = internalMutation({
       failedCount: job.failedCount + (args.failedDelta ?? 0),
       pageCount: job.pageCount + (args.pageCountDelta ?? 0),
       totalCount: args.totalCount ?? job.totalCount,
+      downloadBaseUrl:
+        args.downloadBaseUrl === undefined
+          ? job.downloadBaseUrl
+          : args.downloadBaseUrl ?? undefined,
       cursor:
         args.cursor === undefined
           ? job.cursor
@@ -708,9 +720,10 @@ export const syncClawhubCatalogBatch = internalAction({
       let importedInThisBatch = 0;
       let limitReached = false;
       const failed: Array<{ slug: string; reason: string }> = [];
+      let nextOffset = cursorState.pageOffset;
+      let downloadBaseUrl = job.downloadBaseUrl;
 
-      for (let index = cursorState.pageOffset; index < page.length; index += 1) {
-        const item = page[index];
+      while (nextOffset < page.length) {
         const currentJob = (await ctx.runQuery(internal.clawhubSync.getClawhubSyncJobByIdInternal, {
           jobId: args.jobId,
         })) as ClawhubSyncJobDoc | null;
@@ -732,25 +745,44 @@ export const syncClawhubCatalogBatch = internalAction({
           };
         }
 
-        const ownerHandle = item.ownerHandle?.trim();
-        const skillSlug = item.skill?.slug?.trim().toLowerCase();
-        if (!ownerHandle || !skillSlug) {
-          skipped += 1;
-          await ctx.runMutation(internal.clawhubSync.updateClawhubSyncJobInternal, {
-            jobId: args.jobId,
-            skippedDelta: 1,
-            cursor: serializeSyncCursorState({
-              pageCursor: cursorState.pageCursor,
-              pageOffset: index + 1,
-            }),
-          });
-          continue;
+        const remainingImportSlots = MAX_IMPORT_BATCH_ITEMS - importedInThisBatch;
+        if (remainingImportSlots <= 0) {
+          limitReached = nextOffset < page.length;
+          break;
         }
 
-        try {
+        const chunk: Array<{
+          index: number;
+          item: ClawhubCatalogEntry;
+          ownerHandle: string;
+          skillSlug: string;
+        }> = [];
+
+        while (
+          nextOffset < page.length &&
+          chunk.length < Math.min(MAX_IMPORT_CONCURRENCY, remainingImportSlots)
+        ) {
+          const index = nextOffset;
+          const item = page[index];
+          nextOffset += 1;
+
+          const ownerHandle = item?.ownerHandle?.trim();
+          const skillSlug = item?.skill?.slug?.trim().toLowerCase();
+          if (!ownerHandle || !skillSlug) {
+            skipped += 1;
+            await ctx.runMutation(internal.clawhubSync.updateClawhubSyncJobInternal, {
+              jobId: args.jobId,
+              skippedDelta: 1,
+              cursor: serializeSyncCursorState({
+                pageCursor: cursorState.pageCursor,
+                pageOffset: index + 1,
+              }),
+            });
+            continue;
+          }
+
           const upstreamVersion = item.latestVersion?.version?.trim();
           const localVersion = localVersionMap.get(skillSlug) ?? null;
-
           if (upstreamVersion && localVersion && upstreamVersion === localVersion) {
             skipped += 1;
             await ctx.runMutation(internal.clawhubSync.updateClawhubSyncJobInternal, {
@@ -764,18 +796,56 @@ export const syncClawhubCatalogBatch = internalAction({
             continue;
           }
 
-          // Actually process the heavy sync
-          const result = await syncClawhubSkillPage(ctx, {
-            localUserId: job.localUserId,
-            pageUrl: `https://clawhub.ai/${ownerHandle}/${skillSlug}`,
-            upstreamSlug: skillSlug,
-            upstreamDisplayName: item.skill?.displayName?.trim() || undefined,
-            upstreamVersion: item.latestVersion?.version ?? undefined,
-            ownerHandle,
-            upstreamStats: normalizeUpstreamStats(item.skill?.stats),
-          });
+          chunk.push({ index, item, ownerHandle, skillSlug });
+        }
 
-          if (result === "imported") {
+        if (chunk.length === 0) {
+          continue;
+        }
+
+        if (!downloadBaseUrl) {
+          try {
+            downloadBaseUrl = await resolveClawhubDownloadBaseUrl(
+              `https://clawhub.ai/${chunk[0]!.ownerHandle}/${chunk[0]!.skillSlug}`,
+              fetch,
+            );
+            await ctx.runMutation(internal.clawhubSync.updateClawhubSyncJobInternal, {
+              jobId: args.jobId,
+              downloadBaseUrl,
+            });
+          } catch (error) {
+            console.warn("Failed to resolve ClawHub download base URL, using fallback.", error);
+          }
+        }
+
+        const chunkResults = await Promise.all(
+          chunk.map(async (entry) => {
+            try {
+              const result = await syncClawhubSkillPage(ctx, {
+                localUserId: job.localUserId,
+                pageUrl: `https://clawhub.ai/${entry.ownerHandle}/${entry.skillSlug}`,
+                upstreamSlug: entry.skillSlug,
+                upstreamDisplayName: entry.item.skill?.displayName?.trim() || undefined,
+                upstreamVersion: entry.item.latestVersion?.version ?? undefined,
+                ownerHandle: entry.ownerHandle,
+                downloadBaseUrl,
+                upstreamStats: normalizeUpstreamStats(entry.item.skill?.stats),
+              });
+              return { index: entry.index, slug: entry.skillSlug, status: result } as const;
+            } catch (error) {
+              console.error(`Failed to sync skill ${entry.ownerHandle}/${entry.skillSlug}:`, error);
+              return {
+                index: entry.index,
+                slug: entry.skillSlug,
+                status: "failed",
+                reason: toErrorMessage(error),
+              } as const;
+            }
+          }),
+        );
+
+        for (const result of chunkResults.sort((left, right) => left.index - right.index)) {
+          if (result.status === "imported") {
             imported += 1;
             importedInThisBatch += 1;
             await ctx.runMutation(internal.clawhubSync.updateClawhubSyncJobInternal, {
@@ -783,46 +853,33 @@ export const syncClawhubCatalogBatch = internalAction({
               importedDelta: 1,
               cursor: serializeSyncCursorState({
                 pageCursor: cursorState.pageCursor,
-                pageOffset: index + 1,
+                pageOffset: result.index + 1,
               }),
               lastError: undefined,
             });
-            if (importedInThisBatch >= MAX_IMPORT_BATCH_ITEMS) {
-              limitReached = index + 1 < page.length;
-              break;
-            }
-          } else {
-            skipped += 1;
-            await ctx.runMutation(internal.clawhubSync.updateClawhubSyncJobInternal, {
-              jobId: args.jobId,
-              skippedDelta: 1,
-              cursor: serializeSyncCursorState({
-                pageCursor: cursorState.pageCursor,
-                pageOffset: index + 1,
-              }),
-              lastError: undefined,
-            });
+            continue;
           }
-        } catch (error) {
-          console.error(`Failed to sync skill ${ownerHandle}/${skillSlug}:`, error);
-          const reason = toErrorMessage(error);
-          const shouldSkip = shouldSkipSyncError(reason);
+
           failed.push({
-            slug: skillSlug,
-            reason,
+            slug: result.slug,
+            reason: result.reason,
           });
+          const shouldSkip = shouldSkipSyncError(result.reason);
+          if (shouldSkip) {
+            skipped += 1;
+          }
           await ctx.runMutation(internal.clawhubSync.updateClawhubSyncJobInternal, {
             jobId: args.jobId,
             skippedDelta: shouldSkip ? 1 : undefined,
             failedDelta: shouldSkip ? undefined : 1,
             cursor: serializeSyncCursorState({
               pageCursor: cursorState.pageCursor,
-              pageOffset: index + 1,
+              pageOffset: result.index + 1,
             }),
-            lastError: reason,
+            lastError: result.reason,
             recentFailure: {
-              slug: skillSlug,
-              reason,
+              slug: result.slug,
+              reason: result.reason,
               at: Date.now(),
             },
           });
@@ -832,14 +889,14 @@ export const syncClawhubCatalogBatch = internalAction({
       const shouldResumeSamePage = limitReached;
       const nextState = shouldResumeSamePage
         ? serializeSyncCursorState({
-          pageCursor: cursorState.pageCursor,
-          pageOffset: Math.min(page.length, cursorState.pageOffset + imported + skipped + failed.length),
-        })
+            pageCursor: cursorState.pageCursor,
+            pageOffset: Math.min(page.length, nextOffset),
+          })
         : hasMore
           ? serializeSyncCursorState({
-            pageCursor: nextCursor,
-            pageOffset: 0,
-          })
+              pageCursor: nextCursor,
+              pageOffset: 0,
+            })
           : null;
       const effectiveHasMore = shouldResumeSamePage || hasMore;
 
@@ -920,6 +977,7 @@ async function syncClawhubSkillPage(
     localUserId: Id<"users">;
     pageUrl: string;
     ownerHandle: string;
+    downloadBaseUrl?: string;
     upstreamDisplayName?: string;
     upstreamVersion?: string;
     upstreamSlug: string;
@@ -931,7 +989,9 @@ async function syncClawhubSkillPage(
     } | null;
   },
 ) {
-  const metadata = await resolveClawhubImportMetadata(params.pageUrl, fetch);
+  const metadata = await resolveClawhubImportMetadata(params.pageUrl, fetch, {
+    downloadBaseUrl: params.downloadBaseUrl,
+  });
   const targetSlug = await resolveMirrorSlug(ctx, {
     localUserId: params.localUserId,
     ownerHandle: params.ownerHandle,
@@ -967,8 +1027,6 @@ async function syncClawhubSkillPage(
         lower === "package.json"
       );
     }));
-    // Also include the original archive itself as a special file
-    entries["_archive.zip"] = zipBytes;
   } else {
     entries = stripGitHubZipRoot(unzipToEntries(zipBytes));
   }
@@ -987,12 +1045,6 @@ async function syncClawhubSkillPage(
   const selectedPaths = selectClawhubImportPaths({ candidate, files, fileBytes });
   if (selectedPaths.length === 0) {
     throw new ConvexError("No files selected");
-  }
-
-  // Handle _archive.zip specifically if in heavy mode
-  if (isHeavy && entries["_archive.zip"]) {
-    selectedPaths.push("_archive.zip");
-    fileBytes.set("_archive.zip", entries["_archive.zip"]);
   }
 
   let storedFiles: Array<{
@@ -1021,16 +1073,17 @@ async function syncClawhubSkillPage(
     if (!sanitized) throw new ConvexError("Invalid file paths");
 
     const sha256 = await sha256Hex(bytes);
-    const contentType = path.toLowerCase().endsWith(".zip") ? "application/zip" : "text/plain";
-    const storageId = await ctx.storage.store(new Blob([new Uint8Array(bytes)], {
-      type: contentType,
-    }));
+    const storageId = await ctx.storage.store(
+      new Blob([new Uint8Array(bytes)], {
+        type: "text/plain",
+      }),
+    );
     storedFiles?.push({
       path: sanitized,
       size: bytes.byteLength,
       storageId,
       sha256,
-      contentType,
+      contentType: "text/plain",
     });
   }
 
