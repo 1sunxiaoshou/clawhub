@@ -128,6 +128,10 @@ emit_env_entry() {
   if [[ -z "$value" ]]; then
     return
   fi
+  if [[ "$key" == "JWKS" ]]; then
+    printf "%s='%s'\n" "$key" "$value"
+    return
+  fi
   printf '%s="' "$key"
   escape_env_value "$value"
   printf '"\n'

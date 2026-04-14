@@ -832,14 +832,14 @@ export const syncClawhubCatalogBatch = internalAction({
       const shouldResumeSamePage = limitReached;
       const nextState = shouldResumeSamePage
         ? serializeSyncCursorState({
-            pageCursor: cursorState.pageCursor,
-            pageOffset: Math.min(page.length, cursorState.pageOffset + imported + skipped + failed.length),
-          })
+          pageCursor: cursorState.pageCursor,
+          pageOffset: Math.min(page.length, cursorState.pageOffset + imported + skipped + failed.length),
+        })
         : hasMore
           ? serializeSyncCursorState({
-              pageCursor: nextCursor,
-              pageOffset: 0,
-            })
+            pageCursor: nextCursor,
+            pageOffset: 0,
+          })
           : null;
       const effectiveHasMore = shouldResumeSamePage || hasMore;
 
@@ -948,7 +948,7 @@ async function syncClawhubSkillPage(
 
   let zipBytes: Uint8Array | null = await downloadClawhubImportZip(metadata, fetch);
   const canonicalUrl = metadata.canonicalUrl;
-  
+
   const inspection = inspectZipArchive(zipBytes);
   const isHeavy = inspection.exceedsLimits;
   let entries: Record<string, Uint8Array> | null = null;

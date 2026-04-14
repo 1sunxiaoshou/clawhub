@@ -26,8 +26,10 @@ export const Route = createFileRoute("/import")({
 // ─── Clawhub 同步区域 ────────────────────────────────────────────────────────
 
 function ClawhubSyncSection() {
-  const job = useQuery(api.clawhubSync.getLatestClawhubSyncJob);
+  const syncView = useQuery(api.clawhubSync.getLatestClawhubSyncJobView);
+  const job = syncView?.job ?? null;
   const triggerSync = useAction(api.clawhubSync.triggerClawhubCatalogSync);
+  const restartSync = useAction(api.clawhubSync.restartClawhubCatalogSync);
   const pauseSync = useAction(api.clawhubSync.pauseClawhubCatalogSync);
   const [isBusy, setIsBusy] = useState(false);
 
@@ -56,31 +58,70 @@ function ClawhubSyncSection() {
     }
   };
 
-  const processed = (job?.importedCount ?? 0) + (job?.skippedCount ?? 0) + (job?.failedCount ?? 0);
-  const total = job?.totalCount ?? 0;
-  const progressPct = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
-
-  const statusLabel = (() => {
-    if (!job) return "尚未启动";
-    switch (job.status) {
-      case "running": return "同步中…";
-      case "paused": return "已暂停";
-      case "done": return "已完成";
-      case "failed": return "失败";
-      default: return job.status;
+  const handleRestart = async () => {
+    setIsBusy(true);
+    try {
+      await restartSync({});
+      toast.success("已重新开始同步");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsBusy(false);
     }
-  })();
+  };
+
+  const processed = syncView?.processed ?? 0;
+  const total = syncView?.total ?? 0;
+  const progressPct = total > 0 ? Math.min(100, (processed / total) * 100) : 0;
+  const progressText = `${progressPct.toFixed(2)}%`;
+  const hasRemainingWork = syncView?.hasRemainingWork ?? false;
+
+  const statusLabel = syncView?.statusLabel ?? "尚未启动";
 
   const statusColor = (() => {
     if (!job) return "text-[color:var(--ink-soft)]";
-    switch (job.status) {
+    switch (syncView?.phase) {
       case "running": return "text-blue-500";
-      case "done": return "text-green-500";
-      case "failed": return "text-red-500";
-      case "paused": return "text-amber-500";
+      case "completed": return "text-green-500";
+      case "failed_resumable":
+      case "failed_terminal": return "text-red-500";
+      case "paused_resumable":
+      case "paused_terminal": return "text-amber-500";
       default: return "text-[color:var(--ink-soft)]";
-    }
+      }
   })();
+
+  const primaryAction = (() => {
+    if ((syncView?.primaryAction ?? "restart") === "pause") {
+      return {
+        label: "暂停同步",
+        icon: <Pause className="mr-2 h-4 w-4" />,
+        onClick: handlePause,
+      };
+    }
+    if ((syncView?.primaryAction ?? "restart") === "resume") {
+      return {
+        label: "继续同步",
+        icon: <Play className="mr-2 h-4 w-4" />,
+        onClick: handleStartOrResume,
+      };
+    }
+    if (!job) {
+      return {
+        label: "开始同步",
+        icon: <RefreshCw className="mr-2 h-4 w-4" />,
+        onClick: handleStartOrResume,
+      };
+    }
+    return {
+      label: "重新开始",
+      icon: <RefreshCw className="mr-2 h-4 w-4" />,
+      onClick: handleRestart,
+    };
+  })();
+
+  const showRestart = Boolean(job) && syncView?.canRestart && hasRemainingWork;
+  const restartLabel = "放弃当前进度并重来";
 
   return (
     <Card className="mb-8 p-6">
@@ -94,34 +135,24 @@ function ClawhubSyncSection() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {job?.status === "running" ? (
+          <Button
+            size="sm"
+            variant={syncView?.primaryAction === "pause" ? "outline" : "default"}
+            disabled={isBusy}
+            onClick={primaryAction.onClick}
+          >
+            {isBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : primaryAction.icon}
+            {primaryAction.label}
+          </Button>
+          {showRestart && (
             <Button
               variant="outline"
               size="sm"
               disabled={isBusy}
-              onClick={handlePause}
+              onClick={handleRestart}
             >
-              {isBusy ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Pause className="mr-2 h-4 w-4" />
-              )}
-              暂停同步
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              disabled={isBusy}
-              onClick={handleStartOrResume}
-            >
-              {isBusy ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : job?.status === "paused" ? (
-                <Play className="mr-2 h-4 w-4" />
-              ) : (
-                <RefreshCw className="mr-2 h-4 w-4" />
-              )}
-              {!job || job.status === "done" ? "开始同步" : "恢复同步"}
+              <RefreshCw className="mr-2 h-4 w-4" />
+              {restartLabel}
             </Button>
           )}
         </div>
@@ -133,7 +164,7 @@ function ClawhubSyncSection() {
           <span className={`font-semibold ${statusColor}`}>{statusLabel}</span>
           <span className="text-[color:var(--ink-soft)]">
             {total > 0
-              ? `${processed.toLocaleString()} / ${total.toLocaleString()} (${progressPct}%)`
+              ? `${processed.toLocaleString()} / ${total.toLocaleString()} (${progressText})`
               : processed > 0
                 ? `已处理 ${processed.toLocaleString()} 条`
                 : "—"}
@@ -142,7 +173,7 @@ function ClawhubSyncSection() {
         <div className="h-2 w-full overflow-hidden rounded-full bg-[color:var(--line)]">
           <div
             className="h-full rounded-full bg-[color:var(--accent)] transition-all duration-500"
-            style={{ width: `${progressPct}%` }}
+            style={{ width: `${progressPct.toFixed(2)}%` }}
           />
         </div>
       </div>

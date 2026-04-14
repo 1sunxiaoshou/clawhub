@@ -104,9 +104,15 @@ function Read-DotEnvFileOrEmpty {
 }
 
 function Format-DotEnvValue {
-  param([string]$Value)
+  param(
+    [string]$Value,
+    [switch]$RawJson
+  )
 
   $normalized = $Value.Replace("`r`n", "`n").Replace("`r", "`n")
+  if ($RawJson) {
+    return "'$normalized'"
+  }
   if ($normalized -match '^[A-Za-z0-9_./:-]+$') {
     return $normalized
   }
@@ -138,7 +144,8 @@ function Write-DotEnvFile {
     if ([string]::IsNullOrWhiteSpace($value)) {
       continue
     }
-    $entries.Add("$key=$(Format-DotEnvValue -Value $value)")
+    $rawJson = $key -eq 'JWKS'
+    $entries.Add("$key=$(Format-DotEnvValue -Value $value -RawJson:$rawJson)")
   }
 
   $content = [string]::Join("`n", $entries)

@@ -2,6 +2,9 @@
   "name": "clawhub",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "build": "bun --bun vite build && bun scripts/copy-og-assets.ts",
     "auth:keys": "bun scripts/generate-convex-auth-keys.ts",

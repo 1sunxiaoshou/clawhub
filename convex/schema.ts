@@ -1306,6 +1306,16 @@ const skillOwnershipTransfers = defineTable({
   .index("by_from_user_status", ["fromUserId", "status"])
   .index("by_skill_status", ["skillId", "status"]);
 
+const publicProxies = defineTable({
+  address: v.string(),
+  protocol: v.union(v.literal("http"), v.literal("https")),
+  status: v.union(v.literal("active"), v.literal("failed")),
+  failCount: v.number(),
+  updatedAt: v.number(),
+})
+  .index("by_address", ["address"])
+  .index("by_status_updated", ["status", "updatedAt"]);
+
 const clawhubSyncJobs = defineTable({
   source: v.literal("clawhub"),
   sourceUrl: v.string(),
@@ -1389,5 +1399,6 @@ export default defineSchema({
   userSkillInstalls,
   userSkillRootInstalls,
   skillOwnershipTransfers,
+  publicProxies,
   clawhubSyncJobs,
 });

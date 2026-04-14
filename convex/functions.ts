@@ -174,18 +174,13 @@ export async function syncPackageSearchDigestsForOwnerPublisherId(
   ownerPublisherId: Id<"publishers"> | null | undefined,
 ) {
   if (!ownerPublisherId) return;
-  let cursor: string | null = null;
   try {
-    while (true) {
-      const page = await ctx.db
-        .query("packages")
-        .withIndex("by_owner_publisher", (q) => q.eq("ownerPublisherId", ownerPublisherId))
-        .paginate({ cursor, numItems: 100 });
-      for (const pkg of page.page) {
-        await syncPackageSearchDigest(ctx, pkg);
-      }
-      if (page.isDone) break;
-      cursor = page.continueCursor;
+    const page = await ctx.db
+      .query("packages")
+      .withIndex("by_owner_publisher", (q) => q.eq("ownerPublisherId", ownerPublisherId))
+      .paginate({ cursor: null, numItems: 100 });
+    for (const pkg of page.page) {
+      await syncPackageSearchDigest(ctx, pkg);
     }
   } catch (error) {
     if (isMissingTableError(error, "packages")) return;
@@ -218,18 +213,13 @@ export async function syncSkillSearchDigestsForOwnerPublisherId(
   ownerPublisherId: Id<"publishers"> | null | undefined,
 ) {
   if (!ownerPublisherId) return;
-  let cursor: string | null = null;
   try {
-    while (true) {
-      const page = await ctx.db
-        .query("skills")
-        .withIndex("by_owner_publisher", (q) => q.eq("ownerPublisherId", ownerPublisherId))
-        .paginate({ cursor, numItems: 100 });
-      for (const skill of page.page) {
-        await syncSkillSearchDigestForSkill(ctx, skill);
-      }
-      if (page.isDone) break;
-      cursor = page.continueCursor;
+    const page = await ctx.db
+      .query("skills")
+      .withIndex("by_owner_publisher", (q) => q.eq("ownerPublisherId", ownerPublisherId))
+      .paginate({ cursor: null, numItems: 100 });
+    for (const skill of page.page) {
+      await syncSkillSearchDigestForSkill(ctx, skill);
     }
   } catch (error) {
     if (isMissingTableError(error, "skills")) return;
@@ -257,18 +247,52 @@ export async function scheduleOwnerPublisherDigestSync(
 export const syncPackageSearchDigestsForOwnerPublisherIdInternal = rawInternalMutation({
   args: {
     ownerPublisherId: v.id("publishers"),
+    cursor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await syncPackageSearchDigestsForOwnerPublisherId(ctx, args.ownerPublisherId);
+    const page = await ctx.db
+      .query("packages")
+      .withIndex("by_owner_publisher", (q) => q.eq("ownerPublisherId", args.ownerPublisherId))
+      .paginate({ cursor: args.cursor ?? null, numItems: 100 });
+    for (const pkg of page.page) {
+      await syncPackageSearchDigest(ctx, pkg);
+    }
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.functions.syncPackageSearchDigestsForOwnerPublisherIdInternal,
+        {
+          ownerPublisherId: args.ownerPublisherId,
+          cursor: page.continueCursor,
+        },
+      );
+    }
   },
 });
 
 export const syncSkillSearchDigestsForOwnerPublisherIdInternal = rawInternalMutation({
   args: {
     ownerPublisherId: v.id("publishers"),
+    cursor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await syncSkillSearchDigestsForOwnerPublisherId(ctx, args.ownerPublisherId);
+    const page = await ctx.db
+      .query("skills")
+      .withIndex("by_owner_publisher", (q) => q.eq("ownerPublisherId", args.ownerPublisherId))
+      .paginate({ cursor: args.cursor ?? null, numItems: 100 });
+    for (const skill of page.page) {
+      await syncSkillSearchDigestForSkill(ctx, skill);
+    }
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.functions.syncSkillSearchDigestsForOwnerPublisherIdInternal,
+        {
+          ownerPublisherId: args.ownerPublisherId,
+          cursor: page.continueCursor,
+        },
+      );
+    }
   },
 });
 

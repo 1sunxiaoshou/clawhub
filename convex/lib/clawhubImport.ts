@@ -13,6 +13,8 @@ export type ClawhubImportResolved = {
   zipBytes: Uint8Array;
 };
 
+export type ClawhubImportMetadata = Omit<ClawhubImportResolved, "zipBytes">;
+
 export function parseClawhubImportUrl(input: string): ClawhubImportUrl {
   const originalUrl = input.trim();
   let url: URL;
@@ -47,6 +49,16 @@ export function extractClawhubDownloadZipUrl(html: string, pageUrl: string) {
 }
 
 export async function resolveClawhubImportPage(pageUrl: string, fetcher: typeof fetch) {
+  const metadata = await resolveClawhubImportMetadata(pageUrl, fetcher);
+  const zipBytes = await downloadClawhubImportZip(metadata, fetcher);
+
+  return {
+    ...metadata,
+    zipBytes,
+  } satisfies ClawhubImportResolved;
+}
+
+export async function resolveClawhubImportMetadata(pageUrl: string, fetcher: typeof fetch) {
   const parsed = parseClawhubImportUrl(pageUrl);
   const response = await fetcher(parsed.originalUrl, {
     headers: { "User-Agent": "clawhub/clawhub-import" },
@@ -56,7 +68,6 @@ export async function resolveClawhubImportPage(pageUrl: string, fetcher: typeof 
   const html = await response.text();
   const canonicalUrl = extractCanonicalUrl(html, parsed.originalUrl) ?? parsed.originalUrl;
   const downloadZipUrl = extractClawhubDownloadZipUrl(html, canonicalUrl);
-  const zipBytes = await fetchClawhubZipBytes(downloadZipUrl, fetcher);
   const slug = getSlugFromClawhubUrl(canonicalUrl);
 
   return {
@@ -64,8 +75,14 @@ export async function resolveClawhubImportPage(pageUrl: string, fetcher: typeof 
     canonicalUrl,
     downloadZipUrl,
     slug,
-    zipBytes,
-  } satisfies ClawhubImportResolved;
+  } satisfies ClawhubImportMetadata;
+}
+
+export async function downloadClawhubImportZip(
+  metadata: ClawhubImportMetadata,
+  fetcher: typeof fetch,
+) {
+  return await fetchClawhubZipBytes(metadata.downloadZipUrl, fetcher);
 }
 
 function extractCanonicalUrl(html: string, pageUrl: string) {

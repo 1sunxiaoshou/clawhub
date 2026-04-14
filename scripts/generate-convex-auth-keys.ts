@@ -73,6 +73,9 @@ function generateAuthKeys(kid: string) {
 }
 
 function formatEnvLine(key: string, value: string) {
+  if (key === "JWKS") {
+    return `${key}='${value}'`;
+  }
   return `${key}=${JSON.stringify(value)}`;
 }
 
@@ -106,7 +109,7 @@ Options:
 }
 
 async function main() {
-  const parsed = parseArgs(Bun.argv.slice(2));
+  const parsed = parseArgs(process.argv.slice(2));
   if (parsed.help) {
     printHelp();
     return;

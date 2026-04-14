@@ -23,7 +23,7 @@ export const cleanupReservedSlug = internalMutation({
     // 2. 查找可能存在的软删除 Skill
     const existingSkill = await ctx.db
       .query("skills")
-      .withIndex("slug", (q) => q.eq("slug", args.slug))
+      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
       .unique();
 
     if (existingSkill) {

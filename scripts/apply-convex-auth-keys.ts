@@ -92,7 +92,7 @@ function runConvexEnvSetFromFile(envFilePath: string, useProd: boolean) {
 }
 
 async function main() {
-  const parsed = parseArgs(Bun.argv.slice(2));
+  const parsed = parseArgs(process.argv.slice(2));
   if (parsed.help) {
     printHelp();
     return;
@@ -112,7 +112,7 @@ async function main() {
   const tempEnvPath = join(tempDir, "auth.env");
   const tempEnvContent = [
     `JWT_PRIVATE_KEY=${JSON.stringify(keys.JWT_PRIVATE_KEY)}`,
-    `JWKS=${JSON.stringify(keys.JWKS)}`,
+    `JWKS='${keys.JWKS}'`,
     "",
   ].join("\n");
 
