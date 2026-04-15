@@ -33,6 +33,7 @@ function isMissingTableError(error: unknown, table: string) {
 
 type PackageDigestSyncCtx = Pick<MutationCtx, "db">;
 type OwnerPublisherDigestScheduleCtx = Pick<Partial<MutationCtx>, "scheduler">;
+type OwnerPublisherDigestKind = "package" | "skill";
 type LatestPackageRelease = Pick<
   Doc<"packageReleases">,
   | "_id"
@@ -47,6 +48,113 @@ type LatestPackageRelease = Pick<
 > & {
   scanStatus?: Doc<"packages">["scanStatus"];
 };
+
+const DIGEST_RELEVANT_PUBLISHER_FIELDS = [
+  "handle",
+  "kind",
+  "displayName",
+  "image",
+  "linkedUserId",
+  "deletedAt",
+  "deactivatedAt",
+] as const satisfies readonly (keyof Doc<"publishers">)[];
+
+export function shouldSyncOwnerPublisherDigests(
+  change:
+    | { operation: "insert"; newDoc: Doc<"publishers"> }
+    | { operation: "delete"; oldDoc: Doc<"publishers">; id: Id<"publishers"> }
+    | {
+        operation: "update";
+        oldDoc: Doc<"publishers">;
+        newDoc: Doc<"publishers">;
+      },
+) {
+  if (change.operation !== "update") return true;
+  return DIGEST_RELEVANT_PUBLISHER_FIELDS.some(
+    (field) => change.oldDoc[field] !== change.newDoc[field],
+  );
+}
+
+async function getOwnerPublisherDigestSyncState(
+  ctx: Pick<MutationCtx, "db">,
+  ownerPublisherId: Id<"publishers">,
+  kind: OwnerPublisherDigestKind,
+) {
+  return await ctx.db
+    .query("ownerPublisherDigestSyncState")
+    .withIndex("by_owner_kind", (q) => q.eq("ownerPublisherId", ownerPublisherId).eq("kind", kind))
+    .unique();
+}
+
+async function scheduleOwnerPublisherDigestRun(
+  ctx: OwnerPublisherDigestScheduleCtx & Pick<MutationCtx, "db">,
+  kind: OwnerPublisherDigestKind,
+  ownerPublisherId: Id<"publishers">,
+) {
+  if (!ctx.scheduler) return;
+  const existing = await getOwnerPublisherDigestSyncState(ctx, ownerPublisherId, kind);
+  const now = Date.now();
+  if (existing) {
+    await ctx.db.patch(existing._id, {
+      pendingResync: true,
+      updatedAt: now,
+    });
+    return;
+  }
+
+  await ctx.db.insert("ownerPublisherDigestSyncState", {
+    ownerPublisherId,
+    kind,
+    status: "scheduled",
+    pendingResync: false,
+    updatedAt: now,
+  });
+
+  const ref =
+    kind === "package"
+      ? internal.functions.syncPackageSearchDigestsForOwnerPublisherIdInternal
+      : internal.functions.syncSkillSearchDigestsForOwnerPublisherIdInternal;
+  await ctx.scheduler.runAfter(0, ref, { ownerPublisherId });
+}
+
+async function beginOwnerPublisherDigestRun(
+  ctx: Pick<MutationCtx, "db">,
+  ownerPublisherId: Id<"publishers">,
+  kind: OwnerPublisherDigestKind,
+) {
+  const existing = await getOwnerPublisherDigestSyncState(ctx, ownerPublisherId, kind);
+  if (!existing) return null;
+  if (existing.status !== "running") {
+    await ctx.db.patch(existing._id, {
+      status: "running",
+      updatedAt: Date.now(),
+    });
+  }
+  return existing;
+}
+
+async function finishOwnerPublisherDigestRun(
+  ctx: OwnerPublisherDigestScheduleCtx & Pick<MutationCtx, "db">,
+  ownerPublisherId: Id<"publishers">,
+  kind: OwnerPublisherDigestKind,
+) {
+  const existing = await getOwnerPublisherDigestSyncState(ctx, ownerPublisherId, kind);
+  if (!existing) return;
+  if (existing.pendingResync) {
+    await ctx.db.patch(existing._id, {
+      status: "scheduled",
+      pendingResync: false,
+      updatedAt: Date.now(),
+    });
+    const ref =
+      kind === "package"
+        ? internal.functions.syncPackageSearchDigestsForOwnerPublisherIdInternal
+        : internal.functions.syncSkillSearchDigestsForOwnerPublisherIdInternal;
+    await ctx.scheduler?.runAfter(0, ref, { ownerPublisherId });
+    return;
+  }
+  await ctx.db.delete(existing._id);
+}
 
 function toPackageLatestVersionSummary(
   release: LatestPackageRelease | null,
@@ -228,20 +336,12 @@ export async function syncSkillSearchDigestsForOwnerPublisherId(
 }
 
 export async function scheduleOwnerPublisherDigestSync(
-  ctx: OwnerPublisherDigestScheduleCtx,
+  ctx: OwnerPublisherDigestScheduleCtx & Pick<MutationCtx, "db">,
   ownerPublisherId: Id<"publishers"> | null | undefined,
 ) {
   if (!ownerPublisherId || !ctx.scheduler) return;
-  await ctx.scheduler.runAfter(
-    0,
-    internal.functions.syncPackageSearchDigestsForOwnerPublisherIdInternal,
-    { ownerPublisherId },
-  );
-  await ctx.scheduler.runAfter(
-    0,
-    internal.functions.syncSkillSearchDigestsForOwnerPublisherIdInternal,
-    { ownerPublisherId },
-  );
+  await scheduleOwnerPublisherDigestRun(ctx, "package", ownerPublisherId);
+  await scheduleOwnerPublisherDigestRun(ctx, "skill", ownerPublisherId);
 }
 
 export const syncPackageSearchDigestsForOwnerPublisherIdInternal = rawInternalMutation({
@@ -250,6 +350,7 @@ export const syncPackageSearchDigestsForOwnerPublisherIdInternal = rawInternalMu
     cursor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await beginOwnerPublisherDigestRun(ctx, args.ownerPublisherId, "package");
     const page = await ctx.db
       .query("packages")
       .withIndex("by_owner_publisher", (q) => q.eq("ownerPublisherId", args.ownerPublisherId))
@@ -266,7 +367,9 @@ export const syncPackageSearchDigestsForOwnerPublisherIdInternal = rawInternalMu
           cursor: page.continueCursor,
         },
       );
+      return;
     }
+    await finishOwnerPublisherDigestRun(ctx, args.ownerPublisherId, "package");
   },
 });
 
@@ -276,6 +379,7 @@ export const syncSkillSearchDigestsForOwnerPublisherIdInternal = rawInternalMuta
     cursor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await beginOwnerPublisherDigestRun(ctx, args.ownerPublisherId, "skill");
     const page = await ctx.db
       .query("skills")
       .withIndex("by_owner_publisher", (q) => q.eq("ownerPublisherId", args.ownerPublisherId))
@@ -292,7 +396,9 @@ export const syncSkillSearchDigestsForOwnerPublisherIdInternal = rawInternalMuta
           cursor: page.continueCursor,
         },
       );
+      return;
     }
+    await finishOwnerPublisherDigestRun(ctx, args.ownerPublisherId, "skill");
   },
 });
 
@@ -399,6 +505,7 @@ triggers.register("users", async (ctx, change) => {
 });
 
 triggers.register("publishers", async (ctx, change) => {
+  if (!shouldSyncOwnerPublisherDigests(change)) return;
   const ownerPublisherId = change.operation === "delete" ? change.id : change.newDoc._id;
   await scheduleOwnerPublisherDigestSync(ctx, ownerPublisherId);
 });

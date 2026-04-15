@@ -5,6 +5,7 @@ import { internal } from "./_generated/api";
 import {
   repointPackageLatestRelease,
   scheduleOwnerPublisherDigestSync,
+  shouldSyncOwnerPublisherDigests,
   syncPackageSearchDigestForPackageId,
   syncPackageSearchDigestsForOwnerUserId,
 } from "./functions";
@@ -495,7 +496,50 @@ describe("package digest sync", () => {
 
 describe("publisher digest scheduling", () => {
   it("schedules package and skill digest sync in separate background mutations", async () => {
+    const stateRows: Array<Record<string, unknown>> = [];
     const ctx = {
+      db: {
+        query: vi.fn((table: string) => {
+          if (table !== "ownerPublisherDigestSyncState") {
+            throw new Error(`Unexpected table ${table}`);
+          }
+          return {
+            withIndex: vi.fn(
+              (
+                _indexName: string,
+                builder?: (q: { eq: (field: string, value: string) => unknown }) => unknown,
+              ) => {
+                let ownerPublisherId = "";
+                let kind = "";
+                const q = {
+                  eq: (field: string, value: string) => {
+                    if (field === "ownerPublisherId") ownerPublisherId = value;
+                    if (field === "kind") kind = value;
+                    return q;
+                  },
+                };
+                builder?.(q);
+                return {
+                  unique: vi.fn().mockImplementation(async () => {
+                    return (
+                      stateRows.find(
+                        (row) =>
+                          row.ownerPublisherId === ownerPublisherId && row.kind === kind,
+                      ) ?? null
+                    );
+                  }),
+                };
+              },
+            ),
+          };
+        }),
+        insert: vi.fn(async (_table: string, value: Record<string, unknown>) => {
+          stateRows.push({ _id: `state:${stateRows.length + 1}`, ...value });
+          return `state:${stateRows.length}`;
+        }),
+        patch: vi.fn(),
+        delete: vi.fn(),
+      },
       scheduler: {
         runAfter: vi.fn().mockResolvedValue(undefined),
       },
@@ -520,7 +564,143 @@ describe("publisher digest scheduling", () => {
 
   it("skips scheduling when the trigger context has no scheduler", async () => {
     await expect(
-      scheduleOwnerPublisherDigestSync({} as never, "publishers:demo" as never),
+      scheduleOwnerPublisherDigestSync({ db: {} } as never, "publishers:demo" as never),
     ).resolves.toBeUndefined();
   });
+
+  it("dedupes repeated scheduling for the same publisher and marks pendingResync", async () => {
+    const stateRows: Array<Record<string, unknown>> = [
+      {
+        _id: "state:1",
+        ownerPublisherId: "publishers:demo",
+        kind: "skill",
+        status: "running",
+        pendingResync: false,
+        updatedAt: 1,
+      },
+    ];
+    const patch = vi.fn(async (id: string, value: Record<string, unknown>) => {
+      const row = stateRows.find((entry) => entry._id === id);
+      Object.assign(row ?? {}, value);
+    });
+    const ctx = {
+      db: {
+        query: vi.fn((table: string) => {
+          if (table !== "ownerPublisherDigestSyncState") {
+            throw new Error(`Unexpected table ${table}`);
+          }
+          return {
+            withIndex: vi.fn(
+              (
+                _indexName: string,
+                builder?: (q: { eq: (field: string, value: string) => unknown }) => unknown,
+              ) => {
+                let ownerPublisherId = "";
+                let kind = "";
+                const q = {
+                  eq: (field: string, value: string) => {
+                    if (field === "ownerPublisherId") ownerPublisherId = value;
+                    if (field === "kind") kind = value;
+                    return q;
+                  },
+                };
+                builder?.(q);
+                return {
+                  unique: vi.fn().mockImplementation(async () => {
+                    return (
+                      stateRows.find(
+                        (row) =>
+                          row.ownerPublisherId === ownerPublisherId && row.kind === kind,
+                      ) ?? null
+                    );
+                  }),
+                };
+              },
+            ),
+          };
+        }),
+        insert: vi.fn(),
+        patch,
+        delete: vi.fn(),
+      },
+      scheduler: {
+        runAfter: vi.fn().mockResolvedValue(undefined),
+      },
+    };
+
+    await scheduleOwnerPublisherDigestSync(ctx as never, "publishers:demo" as never);
+
+    expect(ctx.scheduler.runAfter).toHaveBeenCalledTimes(1);
+    expect(patch).toHaveBeenCalledWith(
+      "state:1",
+      expect.objectContaining({ pendingResync: true }),
+    );
+  });
+
+  it("re-syncs digests when a digest-relevant publisher field changes", () => {
+    expect(
+      shouldSyncOwnerPublisherDigests({
+        operation: "update",
+        oldDoc: {
+          _id: "publishers:demo",
+          _creationTime: 1,
+          kind: "user",
+          handle: "alice",
+          displayName: "Alice",
+          image: undefined,
+          linkedUserId: "users:alice",
+          trustedPublisher: false,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        newDoc: {
+          _id: "publishers:demo",
+          _creationTime: 1,
+          kind: "user",
+          handle: "alice-renamed",
+          displayName: "Alice",
+          image: undefined,
+          linkedUserId: "users:alice",
+          trustedPublisher: false,
+          createdAt: 1,
+          updatedAt: 2,
+        },
+      } as never),
+    ).toBe(true);
+  });
+
+  it("skips re-sync when only non-digest publisher fields change", () => {
+    expect(
+      shouldSyncOwnerPublisherDigests({
+        operation: "update",
+        oldDoc: {
+          _id: "publishers:demo",
+          _creationTime: 1,
+          kind: "user",
+          handle: "alice",
+          displayName: "Alice",
+          image: undefined,
+          linkedUserId: "users:alice",
+          trustedPublisher: false,
+          createdAt: 1,
+          updatedAt: 1,
+          bio: "old bio",
+        },
+        newDoc: {
+          _id: "publishers:demo",
+          _creationTime: 1,
+          kind: "user",
+          handle: "alice",
+          displayName: "Alice",
+          image: undefined,
+          linkedUserId: "users:alice",
+          trustedPublisher: true,
+          createdAt: 1,
+          updatedAt: 2,
+          bio: "new bio",
+        },
+      } as never),
+    ).toBe(false);
+  });
+
 });

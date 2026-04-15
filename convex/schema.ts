@@ -1245,6 +1245,14 @@ const githubBackupSyncState = defineTable({
   updatedAt: v.number(),
 }).index("by_key", ["key"]);
 
+const ownerPublisherDigestSyncState = defineTable({
+  ownerPublisherId: v.id("publishers"),
+  kind: v.union(v.literal("package"), v.literal("skill")),
+  status: v.union(v.literal("scheduled"), v.literal("running")),
+  pendingResync: v.boolean(),
+  updatedAt: v.number(),
+}).index("by_owner_kind", ["ownerPublisherId", "kind"]);
+
 const userSyncRoots = defineTable({
   userId: v.id("users"),
   rootId: v.string(),
@@ -1396,6 +1404,7 @@ export default defineSchema({
   reservedSlugs,
   reservedHandles,
   githubBackupSyncState,
+  ownerPublisherDigestSyncState,
   userSyncRoots,
   userSkillInstalls,
   userSkillRootInstalls,
