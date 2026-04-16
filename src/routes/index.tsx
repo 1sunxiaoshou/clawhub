@@ -169,7 +169,7 @@ function AmbientBackdrop({ variant }: { variant: 'skills' | 'souls' }) {
 // 1. Skills Home (大厂质感、巨鲸现身、丰富CSS特效版)
 // ============================================================================
 function SkillsHome() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#f8fbff] font-sans selection:bg-blue-500/30 dark:bg-[#050c18]">
@@ -183,7 +183,16 @@ function SkillsHome() {
               <h1 className="opacity-0 [animation:text-slide-up_1s_ease-out_forwards] font-display text-[5.4rem] font-black leading-none tracking-[0.06em] text-slate-900 dark:text-white sm:text-[6.6rem] lg:text-[8.4rem]">
                 {t('home.posterGlyph')}
               </h1>
-              <p className="opacity-0 [animation:text-slide-up_1s_ease-out_forwards] delay-100 mt-5 max-w-[28rem] text-[1.5rem] font-medium leading-[1.85] text-slate-800 dark:text-slate-100 sm:text-[1.8rem] lg:text-[2.05rem]">
+              <p
+                className="opacity-0 [animation:text-slide-up_1s_ease-out_forwards] delay-100 mt-5 font-sans text-[1.08rem] font-normal leading-[1.7] tracking-normal text-slate-500 dark:text-slate-300 sm:text-[1.16rem] lg:text-[1.22rem]"
+                style={{
+                  maxWidth: locale === 'zh-CN' ? '18em' : '34em',
+                  display: '-webkit-box',
+                  WebkitBoxOrient: 'vertical',
+                  WebkitLineClamp: 2,
+                  overflow: 'hidden',
+                }}
+              >
                 {t('home.posterDescription')}
               </p>
             </div>

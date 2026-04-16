@@ -1,6 +1,7 @@
 import { useI18n } from "../lib/i18n";
 import { useLocation } from "@tanstack/react-router";
 import { getSiteName } from "../lib/site";
+import { Container } from "./layout/Container";
 
 export function Footer() {
   const siteName = getSiteName();
@@ -10,15 +11,13 @@ export function Footer() {
 
   return (
     <footer
-      className={`px-7 ${
+      className={`${
         isHomePage ? "fixed inset-x-0 bottom-0 z-20 pb-5 pt-4 bg-transparent" : "mt-auto pb-8 pt-12"
       }`}
     >
-      <div className="mx-auto max-w-[1200px]">
+      <Container>
         <div
-          className={`flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.82rem] text-[color:var(--ink-soft)] ${
-            isHomePage ? "justify-center" : ""
-          }`}
+          className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[0.82rem] text-[color:var(--ink-soft)]"
         >
           <span className="font-semibold text-[color:var(--ink)]">{siteName}</span>
           <FooterLink href="https://clawhub.ai">ClawHub</FooterLink>
@@ -30,7 +29,7 @@ export function Footer() {
           </FooterLink>
           <FooterLink href="https://steipete.me">Peter Steinberger</FooterLink>
         </div>
-      </div>
+      </Container>
     </footer>
   );
 }
