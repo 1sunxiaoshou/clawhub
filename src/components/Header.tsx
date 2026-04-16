@@ -1,6 +1,6 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { Link, useLocation } from "@tanstack/react-router";
-import { CircleUserRound, Languages, Menu, Monitor, Moon, Plus, Sun } from "lucide-react";
+import { CircleUserRound, Languages, Menu, Moon, Plus, Sun } from "lucide-react";
 import { useMemo, useRef } from "react";
 import { gravatarUrl } from "../lib/gravatar";
 import { useI18n } from "../lib/i18n";
@@ -41,12 +41,12 @@ export default function Header() {
   const initial = displayName.charAt(0).toUpperCase();
   const isStaff = isModerator(me);
 
-  const setTheme = (next: "system" | "light" | "dark") => {
+  const setTheme = (next: "light" | "dark") => {
     startThemeTransition({
       nextTheme: next,
       currentTheme: mode,
       setTheme: (value) => {
-        const nextMode = value as "system" | "light" | "dark";
+        const nextMode = value as "light" | "dark";
         applyTheme(nextMode);
         setMode(nextMode);
       },
@@ -55,7 +55,7 @@ export default function Header() {
   };
 
   const cycleTheme = () => {
-    const next = mode === "system" ? "light" : mode === "light" ? "dark" : "system";
+    const next = mode === "light" ? "dark" : "light";
     setTheme(next);
   };
 
@@ -63,9 +63,8 @@ export default function Header() {
     setLocale(locale === "zh-CN" ? "en" : "zh-CN");
   };
 
-  const themeLabel =
-    mode === "system" ? t("header.systemTheme") : mode === "light" ? t("header.lightTheme") : t("header.darkTheme");
-  const ThemeIcon = mode === "system" ? Monitor : mode === "light" ? Sun : Moon;
+  const themeLabel = mode === "light" ? t("header.lightTheme") : t("header.darkTheme");
+  const ThemeIcon = mode === "light" ? Sun : Moon;
 
   const isPathActive = (href: string) =>
     href === "/" ? location.pathname === href : location.pathname === href || location.pathname.startsWith(`${href}/`);

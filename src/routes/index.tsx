@@ -195,6 +195,25 @@ function SkillsHome() {
               >
                 {t('home.posterDescription')}
               </p>
+              <div className="opacity-0 [animation:text-slide-up_1s_ease-out_forwards] delay-200 mt-8">
+                <Link
+                  to="/skills"
+                  search={{
+                    q: undefined,
+                    sort: undefined,
+                    dir: undefined,
+                    highlighted: undefined,
+                    nonSuspicious: undefined,
+                    view: undefined,
+                    focus: undefined,
+                  }}
+                >
+                  <Button className="h-12 rounded-full bg-slate-900 px-6 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(15,23,42,0.18)] transition-all hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100">
+                    {t('home.browseSkills')}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
         </Container>

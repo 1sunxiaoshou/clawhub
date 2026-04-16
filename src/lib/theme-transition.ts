@@ -1,6 +1,6 @@
 import { flushSync } from "react-dom";
 
-export type ThemeValue = "light" | "dark" | "system" | (string & {});
+export type ThemeValue = "light" | "dark" | (string & {});
 
 export type ThemeTransitionContext = {
   element?: HTMLElement | null;

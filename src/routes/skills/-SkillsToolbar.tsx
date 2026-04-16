@@ -1,62 +1,34 @@
 import {
-  ArrowDownUp,
   Check,
-  Database,
-  GitBranch,
+  ChevronDown,
   Grid3X3,
   List,
-  MessageSquare,
-  Package,
-  Plug,
   Search,
-  Shield,
-  Wrench,
+  SlidersHorizontal,
   X,
-  Zap,
 } from "lucide-react";
 import type { RefObject } from "react";
-import { useMemo } from "react";
 import { useI18n } from "../../lib/i18n";
-import { SKILL_CATEGORIES, type SkillCategory } from "../../lib/categories";
-import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../components/ui/select";
-import { type SortDir, type SortKey } from "./-params";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu";
 
 type SkillsToolbarProps = {
   searchInputRef: RefObject<HTMLInputElement | null>;
   query: string;
   hasQuery: boolean;
-  sort: SortKey;
-  dir: SortDir;
+  sort: string;
   view: "cards" | "list";
   highlightedOnly: boolean;
   nonSuspiciousOnly: boolean;
-  capabilityTag?: string;
   onQueryChange: (next: string) => void;
   onToggleHighlighted: () => void;
   onToggleNonSuspicious: () => void;
-  onCapabilityTagChange: (value: string) => void;
   onSortChange: (value: string) => void;
-  onToggleDir: () => void;
   onToggleView: () => void;
-};
-
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-  "mcp-tools": <Plug size={13} />,
-  prompts: <MessageSquare size={13} />,
-  workflows: <GitBranch size={13} />,
-  "dev-tools": <Wrench size={13} />,
-  data: <Database size={13} />,
-  security: <Shield size={13} />,
-  automation: <Zap size={13} />,
-  other: <Package size={13} />,
 };
 
 export function SkillsToolbar({
@@ -64,53 +36,49 @@ export function SkillsToolbar({
   query,
   hasQuery,
   sort,
-  dir,
   view,
   highlightedOnly,
   nonSuspiciousOnly,
-  capabilityTag,
   onQueryChange,
   onToggleHighlighted,
   onToggleNonSuspicious,
-  onCapabilityTagChange,
   onSortChange,
-  onToggleDir,
   onToggleView,
 }: SkillsToolbarProps) {
   const { t } = useI18n();
-  const activeCategory = useMemo(() => {
-    if (query === "__other__") return "other";
-    if (!query) return undefined;
-    return SKILL_CATEGORIES.find((c) =>
-      c.keywords.some((k) => k === query.trim().toLowerCase()),
-    )?.slug;
-  }, [query]);
-
-  const handleCategoryChange = (cat: SkillCategory | undefined) => {
-    if (!cat) {
-      onQueryChange("");
-    } else if (cat.slug === "other") {
-      onQueryChange("__other__");
-    } else if (cat.keywords[0]) {
-      onQueryChange(cat.keywords[0]);
-    } else {
-      onQueryChange("");
+  const sortLabel = (() => {
+    switch (sort) {
+      case "relevance":
+        return t("skills.relevance");
+      case "newest":
+        return t("skills.newest");
+      case "updated":
+        return t("skills.updated");
+      case "downloads":
+        return t("skills.downloads");
+      case "installs":
+        return t("skills.installs");
+      case "stars":
+        return t("skills.stars");
+      case "name":
+        return t("skills.name");
+      default:
+        return t("skills.sortSkills");
     }
-  };
+  })();
 
-  const controlSurfaceClass =
-    "border-[rgba(29,59,78,0.22)] bg-[rgba(255,255,255,0.94)] dark:border-[rgba(255,255,255,0.12)] dark:bg-[rgba(14,28,37,0.84)]";
   return (
-    <div className="flex flex-col gap-3">
-      {/* Search row */}
-      <div className="relative">
-        <Search className="absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-[color:var(--ink-soft)]" />
-        <Input
+    <div className="flex flex-row gap-2.5 flex-wrap relative z-20">
+      {/* Search area */}
+      <div className="relative flex-1 min-w-[200px]">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[15px] h-[15px] text-[color:var(--ink-soft)] pointer-events-none opacity-60" />
+        <input
           ref={searchInputRef}
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder={t("skills.searchPlaceholder")}
-          className={`pl-10 pr-10 dark:text-[rgba(245,238,232,0.96)] ${controlSurfaceClass}`}
+          className="w-full h-10 pl-10 pr-10 rounded-[8px] bg-white dark:bg-[#111b31] border border-[#E6E9EF] dark:border-[rgba(255,255,255,0.1)] text-sm text-[color:var(--ink)] placeholder:opacity-30 outline-none tracking-tight focus:border-[#D6DAE2] transition-all duration-200"
+          type="text"
         />
         {query && (
           <button
@@ -119,149 +87,90 @@ export function SkillsToolbar({
             className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1 text-[color:var(--ink-soft)] transition-colors hover:text-[color:var(--ink)]"
             aria-label={t("skills.clearSearch")}
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
 
-      {/* Filters + sort row */}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Filter chips */}
-        <FilterChip active={highlightedOnly} onClick={onToggleHighlighted}>
-          {t("skills.staffPicks")}
-        </FilterChip>
-        <FilterChip active={nonSuspiciousOnly} onClick={onToggleNonSuspicious}>
-          {t("skills.cleanOnly")}
-        </FilterChip>
-        {capabilityTag ? (
-          <FilterChip
-            active
-            onClick={() => onCapabilityTagChange("__all__")}
-            icon={<X className="h-3 w-3" />}
-          >
-            {t(`skills.capabilities.${capabilityTag}`) || capabilityTag}
-          </FilterChip>
-        ) : null}
-        <Select
-          value={activeCategory ?? "__all__"}
-          onValueChange={(v) =>
-            handleCategoryChange(
-              v === "__all__" ? undefined : SKILL_CATEGORIES.find((c) => c.slug === v),
-            )
-          }
-        >
-          <SelectTrigger
-            className={`w-auto min-w-[156px] min-h-[36px] py-1.5 text-xs font-semibold ${controlSurfaceClass} dark:text-[rgba(245,238,232,0.96)]`}
-            aria-label={t("skills.filterByCategory")}
-          >
-            <SelectValue placeholder={t("skills.allCategories")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">{t("skills.allCategories")}</SelectItem>
-            {SKILL_CATEGORIES.map((cat) => (
-              <SelectItem key={cat.slug} value={cat.slug}>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="opacity-60">{CATEGORY_ICONS[cat.slug]}</span>
-                  {cat.label}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* Sort Dropdown */}
+      <div className="relative">
+          <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="h-10 px-4 rounded-[8px] bg-white dark:bg-[#111b31] border border-[#E6E9EF] dark:border-[rgba(255,255,255,0.1)] text-sm text-[color:var(--ink)] outline-none cursor-pointer tracking-tight font-medium flex items-center gap-1.5 whitespace-nowrap hover:bg-[#F9F9F9] dark:hover:bg-[#16233d] transition-colors duration-200">
+              <span>{sortLabel}</span>
+              <ChevronDown className="w-3.5 h-3.5 opacity-40 transition-transform duration-200" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {hasQuery && (
+              <DropdownMenuItem onClick={() => onSortChange("relevance")}>
+                {t("skills.relevance")}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onClick={() => onSortChange("newest")}>
+              {t("skills.newest")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onSortChange("updated")}>
+              {t("skills.updated")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onSortChange("downloads")}>
+              {t("skills.downloads")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onSortChange("installs")}>
+              {t("skills.installs")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onSortChange("stars")}>
+              {t("skills.stars")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onSortChange("name")}>
+              {t("skills.name")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
-        {/* Spacer */}
-        <div className="ml-auto" />
+      {/* Advanced Filter Button */}
+      <div className="relative">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              aria-label={t("skills.sortSkills")}
+              className="w-10 h-10 rounded-[8px] bg-white dark:bg-[#111b31] border border-[#E6E9EF] dark:border-[rgba(255,255,255,0.1)] flex items-center justify-center cursor-pointer hover:bg-[#F9F9F9] dark:hover:bg-[#16233d] transition-colors duration-200"
+            >
+              <SlidersHorizontal className="w-4 h-4 opacity-60" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-[180px]">
+            <div className="px-2 py-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              {t("skills.displayOptions")}
+            </div>
+            <DropdownMenuItem onClick={onToggleView}>
+              <div className="flex items-center gap-2">
+                {view === "cards" ? <List className="h-3.5 w-3.5" /> : <Grid3X3 className="h-3.5 w-3.5" />}
+                {view === "cards" ? t("skills.listView") : t("skills.gridView")}
+              </div>
+            </DropdownMenuItem>
 
-        {/* Sort */}
-        <Select value={sort} onValueChange={onSortChange}>
-          <SelectTrigger
-            className={`w-auto min-w-[140px] min-h-[36px] py-1.5 text-xs font-semibold ${controlSurfaceClass} dark:text-[rgba(245,238,232,0.96)]`}
-            aria-label={t("skills.sortSkills")}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {hasQuery ? <SelectItem value="relevance">{t("skills.relevance")}</SelectItem> : null}
-            <SelectItem value="newest">{t("skills.newest")}</SelectItem>
-            <SelectItem value="updated">{t("skills.updated")}</SelectItem>
-            <SelectItem value="downloads">{t("skills.downloads")}</SelectItem>
-            <SelectItem value="installs">{t("skills.installs")}</SelectItem>
-            <SelectItem value="stars">{t("skills.stars")}</SelectItem>
-            <SelectItem value="name">{t("skills.name")}</SelectItem>
-          </SelectContent>
-        </Select>
+            <div className="h-px bg-border my-1" />
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onToggleDir}
-          aria-label={`${t("skills.sortSkills")} ${dir === "asc" ? t("skills.ascending") : t("skills.descending")}`}
-          className="min-h-[36px] px-2 rounded-[var(--radius-sm)]"
-        >
-          <ArrowDownUp
-            className={`h-4 w-4 transition-transform ${dir === "asc" ? "rotate-180" : ""}`}
-          />
-        </Button>
-
-        {/* View toggle */}
-        <div
-          className={`inline-flex items-center rounded-[var(--radius-sm)] border p-0.5 ${controlSurfaceClass}`}
-        >
-          <button
-            type="button"
-            onClick={view === "list" ? onToggleView : undefined}
-            className={`inline-flex h-[30px] w-[30px] items-center justify-center rounded-full transition-colors ${
-              view === "cards"
-                ? "bg-[color:var(--accent)] text-white"
-                : "text-[color:var(--ink-soft)] hover:text-[color:var(--ink)]"
-            }`}
-            aria-label={t("skills.gridView")}
-          >
-            <Grid3X3 className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={view === "cards" ? onToggleView : undefined}
-            className={`inline-flex h-[30px] w-[30px] items-center justify-center rounded-full transition-colors ${
-              view === "list"
-                ? "bg-[color:var(--accent)] text-white"
-                : "text-[color:var(--ink-soft)] hover:text-[color:var(--ink)]"
-            }`}
-            aria-label={t("skills.listView")}
-          >
-            <List className="h-3.5 w-3.5" />
-          </button>
-        </div>
+            <div className="px-2 py-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              {t("common.filters")}
+            </div>
+            <DropdownMenuItem onClick={onToggleHighlighted}>
+              <div className="flex items-center gap-2">
+                <Check className={`h-3.5 w-3.5 ${highlightedOnly ? "opacity-100" : "opacity-0"}`} />
+                {t("skills.staffPicks")}
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onToggleNonSuspicious}>
+              <div className="flex items-center gap-2">
+                <Check className={`h-3.5 w-3.5 ${nonSuspiciousOnly ? "opacity-100" : "opacity-0"}`} />
+                {t("skills.cleanOnly")}
+              </div>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
-  );
-}
-
-function FilterChip({
-  active,
-  onClick,
-  children,
-  icon,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-  icon?: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[rgba(29,59,78,0.22)] bg-[rgba(255,255,255,0.94)] px-3.5 min-h-[36px] text-xs font-semibold transition-all duration-150 dark:border-[rgba(255,255,255,0.12)] dark:bg-[rgba(14,28,37,0.84)] ${
-        active
-          ? "border-[color:var(--accent)]/30 bg-[color:var(--accent)]/10 text-[color:var(--accent)] dark:bg-[rgba(108,167,255,0.18)] dark:text-[#dbeafe]"
-          : "text-[color:var(--ink-soft)] hover:border-[color:var(--border-ui-hover)] hover:text-[color:var(--ink)] dark:text-[rgba(245,238,232,0.88)] dark:hover:text-[rgba(245,238,232,0.96)]"
-      }`}
-    >
-      {active && !icon && <Check className="h-3 w-3" />}
-      {icon && <span className={active ? "opacity-100" : "opacity-60"}>{icon}</span>}
-      {children}
-    </button>
   );
 }

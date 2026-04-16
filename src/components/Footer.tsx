@@ -11,9 +11,9 @@ export function Footer() {
 
   return (
     <footer
-      className={`${
+      className={
         isHomePage ? "fixed inset-x-0 bottom-0 z-20 pb-5 pt-4 bg-transparent" : "mt-auto pb-8 pt-12"
-      }`}
+      }
     >
       <Container>
         <div

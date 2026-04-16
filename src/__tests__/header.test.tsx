@@ -30,7 +30,7 @@ vi.mock("../lib/useAuthStatus", () => ({
 vi.mock("../lib/theme", () => ({
   applyTheme: vi.fn(),
   useThemeMode: () => ({
-    mode: "system",
+    mode: "light",
     setMode: vi.fn(),
   }),
 }));

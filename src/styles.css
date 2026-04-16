@@ -1749,3 +1749,76 @@ html.theme-transition::view-transition-new(theme) {
     justify-self: start;
   }
 }
+
+/* ── Modern UI Utilities ── */
+
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+}
+
+.glass-strong {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+}
+
+[data-theme="dark"] .glass {
+  background: rgba(14, 26, 50, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.animate-glass-reveal {
+  animation: glassReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
+}
+
+.delay-1 { animation-delay: 0.1s; }
+.delay-2 { animation-delay: 0.2s; }
+.delay-3 { animation-delay: 0.3s; }
+
+@keyframes glassReveal {
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.pill {
+  @apply rounded-full px-2.5 py-1 text-[15px] font-medium transition-all duration-200 cursor-pointer border;
+}
+
+.pill-active {
+  @apply bg-[#202020] text-white border-[#202020] shadow-[0_2px_4px_rgba(0,0,0,0.1)];
+}
+
+.pill-inactive {
+  @apply border-transparent bg-transparent text-[#111111] hover:bg-transparent hover:text-black;
+}
+
+[data-theme="dark"] .pill-active {
+  @apply bg-white text-black border-white shadow-[0_2px_12px_rgba(255,255,255,0.1)];
+}
+
+[data-theme="dark"] .pill-inactive {
+  @apply border-transparent bg-transparent text-[rgba(255,255,255,0.7)] hover:bg-transparent hover:text-white;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.section-container-wide {
+  @apply mx-auto w-full max-w-[1440px] px-6 md:px-20;
+}

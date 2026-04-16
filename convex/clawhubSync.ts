@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { unzipSync } from "fflate";
 import semver from "semver";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { action, internalAction, internalMutation, internalQuery, query } from "./functions";
 import { assertAdmin, requireUser, requireUserFromAction } from "./lib/access";
@@ -28,6 +28,8 @@ import {
   MAX_IMPORT_CONCURRENCY,
   MIN_CLAWHUB_PAGE_SIZE,
 } from "./lib/clawhubSyncConfig";
+import { legacyFlagsFromVerdict, summarizeReasonCodes, type ModerationVerdict } from "./lib/moderationReasonCodes";
+import { computeIsSuspicious } from "./lib/skillSafety";
 import { publishVersionForUser } from "./lib/skillPublish";
 import { sanitizePath } from "./lib/skills";
 import {
@@ -54,6 +56,41 @@ type ClawhubCatalogEntry = {
       installsCurrent?: number | null;
       installsAllTime?: number | null;
     } | null;
+  } | null;
+};
+
+type ClawhubSkillDetailResponse = {
+  skill?: {
+    tags?: Record<string, string> | null;
+    createdAt?: number | null;
+  } | null;
+  latestVersion?: {
+    version?: string | null;
+    createdAt?: number | null;
+  } | null;
+  moderation?: {
+    isSuspicious?: boolean | null;
+    isMalwareBlocked?: boolean | null;
+    verdict?: "clean" | "suspicious" | "malicious" | null;
+    reasonCodes?: string[] | null;
+    summary?: string | null;
+    engineVersion?: string | null;
+    updatedAt?: number | null;
+  } | null;
+};
+
+type ClawhubMirrorPayload = {
+  skillCreatedAt?: number;
+  versionCreatedAt?: number;
+  mirroredLatestTags?: string[];
+  moderation?: {
+    isSuspicious: boolean;
+    isMalwareBlocked: boolean;
+    verdict: ModerationVerdict;
+    reasonCodes: string[];
+    summary?: string;
+    engineVersion?: string;
+    updatedAt?: number;
   } | null;
 };
 
@@ -386,6 +423,102 @@ export const updateClawhubSkillStatsInternal = internalMutation({
       },
       updatedAt: now,
     });
+  },
+});
+
+export const applyClawhubMirrorMetadataInternal = internalMutation({
+  args: {
+    skillId: v.id("skills"),
+    versionId: v.id("skillVersions"),
+    skillCreatedAt: v.optional(v.number()),
+    versionCreatedAt: v.optional(v.number()),
+    mirroredLatestTags: v.optional(v.array(v.string())),
+    moderation: v.optional(
+      v.union(
+        v.null(),
+        v.object({
+          isSuspicious: v.boolean(),
+          isMalwareBlocked: v.boolean(),
+          verdict: v.union(v.literal("clean"), v.literal("suspicious"), v.literal("malicious")),
+          reasonCodes: v.array(v.string()),
+          summary: v.optional(v.string()),
+          engineVersion: v.optional(v.string()),
+          updatedAt: v.optional(v.number()),
+        }),
+      ),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const skill = await ctx.db.get(args.skillId);
+    const version = await ctx.db.get(args.versionId);
+    if (!skill || !version) return;
+
+    const skillPatch: Partial<Doc<"skills">> = {};
+    const versionPatch: Partial<Doc<"skillVersions">> = {};
+
+    if (args.skillCreatedAt !== undefined) {
+      skillPatch.createdAt = args.skillCreatedAt;
+    }
+
+    if (args.versionCreatedAt !== undefined) {
+      versionPatch.createdAt = args.versionCreatedAt;
+      if (skill.latestVersionId === version._id && skill.latestVersionSummary) {
+        skillPatch.latestVersionSummary = {
+          ...skill.latestVersionSummary,
+          createdAt: args.versionCreatedAt,
+        };
+      }
+    }
+
+    if (args.mirroredLatestTags) {
+      const nextTags: Record<string, Id<"skillVersions">> = { latest: version._id };
+      for (const tag of args.mirroredLatestTags) {
+        const normalizedTag = tag.trim();
+        if (!normalizedTag) continue;
+        nextTags[normalizedTag] = version._id;
+      }
+      skillPatch.tags = nextTags;
+    }
+
+    if (args.moderation) {
+      const flags = mergeLegacyModerationFlags(
+        skill.moderationFlags ?? [],
+        legacyFlagsFromVerdict(args.moderation.verdict) ?? [],
+        args.moderation.isMalwareBlocked,
+      );
+      const moderationReason = `mirror.clawhub.${args.moderation.verdict}`;
+      const moderationStatus =
+        args.moderation.isMalwareBlocked || args.moderation.verdict === "malicious"
+          ? "hidden"
+          : "active";
+      skillPatch.moderationStatus = moderationStatus;
+      skillPatch.moderationReason = moderationReason;
+      skillPatch.moderationVerdict = args.moderation.verdict;
+      skillPatch.moderationReasonCodes = args.moderation.reasonCodes.length
+        ? args.moderation.reasonCodes
+        : undefined;
+      skillPatch.moderationSummary =
+        args.moderation.summary ??
+        summarizeReasonCodes(args.moderation.reasonCodes);
+      skillPatch.moderationEngineVersion = args.moderation.engineVersion;
+      skillPatch.moderationEvaluatedAt = args.moderation.updatedAt;
+      skillPatch.moderationSourceVersionId = version._id;
+      skillPatch.moderationFlags = flags.length ? flags : undefined;
+      skillPatch.isSuspicious = computeIsSuspicious({
+        moderationFlags: flags,
+        moderationReason,
+      });
+      skillPatch.hiddenAt = moderationStatus === "hidden" ? Date.now() : undefined;
+      skillPatch.hiddenBy = undefined;
+      skillPatch.lastReviewedAt = args.moderation.updatedAt ?? Date.now();
+    }
+
+    if (Object.keys(versionPatch).length > 0) {
+      await ctx.db.patch(version._id, versionPatch);
+    }
+    if (Object.keys(skillPatch).length > 0) {
+      await ctx.db.patch(skill._id, skillPatch);
+    }
   },
 });
 
@@ -992,6 +1125,11 @@ async function syncClawhubSkillPage(
   const metadata = await resolveClawhubImportMetadata(params.pageUrl, fetch, {
     downloadBaseUrl: params.downloadBaseUrl,
   });
+  const upstreamDetail = await fetchClawhubSkillDetail(metadata.canonicalUrl, params.upstreamSlug, fetch)
+    .catch((error) => {
+      console.warn(`Failed to fetch ClawHub detail for ${params.upstreamSlug}:`, error);
+      return null;
+    });
   const targetSlug = await resolveMirrorSlug(ctx, {
     localUserId: params.localUserId,
     ownerHandle: params.ownerHandle,
@@ -1099,7 +1237,7 @@ async function syncClawhubSkillPage(
     throw new ConvexError("Version must be valid semver");
   }
 
-  await publishVersionForUser(ctx, params.localUserId, {
+  const publishResult = await publishVersionForUser(ctx, params.localUserId, {
     slug,
     displayName,
     version,
@@ -1122,13 +1260,22 @@ async function syncClawhubSkillPage(
     skipWebhook: true,
   });
 
+  await ctx.runMutation(internal.clawhubSync.applyClawhubMirrorMetadataInternal, {
+    skillId: publishResult.skillId,
+    versionId: publishResult.versionId,
+    skillCreatedAt: normalizeTimestamp(upstreamDetail?.skill?.createdAt),
+    versionCreatedAt: normalizeTimestamp(upstreamDetail?.latestVersion?.createdAt),
+    mirroredLatestTags: pickMirroredLatestTagNames(
+      upstreamDetail?.skill?.tags,
+      upstreamDetail?.latestVersion?.version ?? params.upstreamVersion ?? null,
+    ),
+    moderation: normalizeClawhubModeration(upstreamDetail?.moderation),
+  });
+
   if (params.upstreamStats) {
-    const publishedSkill = (await ctx.runQuery(internal.skills.getSkillBySlugInternal, {
-      slug,
-    })) as { _id: Id<"skills"> } | null;
-    if (publishedSkill?._id) {
+    if (publishResult.skillId) {
       await ctx.runMutation(internal.clawhubSync.updateClawhubSkillStatsInternal, {
-        skillId: publishedSkill._id,
+        skillId: publishResult.skillId,
         stats: params.upstreamStats,
       });
     }
@@ -1360,3 +1507,83 @@ function normalizeUpstreamStats(
     installsAllTime: Math.max(0, Math.floor(stats.installsAllTime ?? 0)),
   };
 }
+
+function normalizeTimestamp(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
+}
+
+function pickMirroredLatestTagNames(
+  tags: Record<string, string> | null | undefined,
+  latestVersion: string | null | undefined,
+) {
+  const normalizedLatest = latestVersion?.trim();
+  if (!tags || !normalizedLatest) return ["latest"];
+  const mirrored = Object.entries(tags)
+    .filter(([, version]) => version?.trim() === normalizedLatest)
+    .map(([tag]) => tag.trim())
+    .filter(Boolean);
+  return Array.from(new Set(["latest", ...mirrored])).sort();
+}
+
+function normalizeClawhubModeration(
+  moderation: ClawhubSkillDetailResponse["moderation"],
+): ClawhubMirrorPayload["moderation"] {
+  if (!moderation) return null;
+  const verdict = moderation.verdict ?? "clean";
+  const reasonCodes = Array.isArray(moderation.reasonCodes)
+    ? moderation.reasonCodes.map((code) => code.trim()).filter(Boolean)
+    : [];
+  return {
+    isSuspicious: Boolean(moderation.isSuspicious),
+    isMalwareBlocked: Boolean(moderation.isMalwareBlocked),
+    verdict,
+    reasonCodes,
+    summary: moderation.summary?.trim() || undefined,
+    engineVersion: moderation.engineVersion?.trim() || undefined,
+    updatedAt: normalizeTimestamp(moderation.updatedAt),
+  };
+}
+
+function mergeLegacyModerationFlags(
+  currentFlags: string[],
+  verdictFlags: string[],
+  isMalwareBlocked: boolean,
+) {
+  const next = new Set(
+    currentFlags.filter(
+      (flag) => flag !== "flagged.suspicious" && flag !== "blocked.malware",
+    ),
+  );
+  for (const flag of verdictFlags) next.add(flag);
+  if (isMalwareBlocked) next.add("blocked.malware");
+  return Array.from(next).sort();
+}
+
+async function fetchClawhubSkillDetail(pageUrl: string, slug: string, fetcher: typeof fetch) {
+  const url = new URL(`/api/v1/skills/${encodeURIComponent(slug)}`, new URL(pageUrl).origin);
+  let lastStatus: number | null = null;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const response = await fetcher(url, {
+      headers: { "User-Agent": "clawhub/clawhub-import" },
+    });
+    if (response.ok) {
+      return (await response.json()) as ClawhubSkillDetailResponse;
+    }
+    lastStatus = response.status;
+    if (response.status !== 429 || attempt === 4) {
+      break;
+    }
+    await delay(1_500 * (attempt + 1));
+  }
+  throw new ConvexError(`ClawHub skill detail fetch failed: ${lastStatus ?? "unknown"}`);
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export const __test = {
+  mergeLegacyModerationFlags,
+  normalizeClawhubModeration,
+  pickMirroredLatestTagNames,
+};
