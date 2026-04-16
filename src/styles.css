@@ -1,7 +1,11 @@
 @import "tailwindcss";
 @import "@fontsource/bricolage-grotesque/latin.css";
+@import "@fontsource/chakra-petch/latin.css";
 @import "@fontsource/manrope/latin.css";
 @import "@fontsource/ibm-plex-mono/latin.css";
+@import "@fontsource/noto-sans-sc/chinese-simplified-400.css";
+@import "@fontsource/noto-sans-sc/chinese-simplified-500.css";
+@import "@fontsource/noto-sans-sc/chinese-simplified-700.css";
 
 @theme {
   --color-bg: var(--bg);
@@ -25,6 +29,7 @@
   --radius-pill: var(--radius-pill);
   --font-display: var(--font-display);
   --font-body: var(--font-body);
+  --font-nav: var(--font-nav);
   --font-mono: var(--font-mono);
   --shadow-default: var(--shadow);
 }
@@ -63,6 +68,7 @@
   --radius-pill: 14px;
   --font-display: "Bricolage Grotesque", "Manrope", sans-serif;
   --font-body: "Manrope", "Bricolage Grotesque", sans-serif;
+  --font-nav: "Chakra Petch", "Noto Sans SC", "Manrope", sans-serif;
   --font-mono:
     "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     "Courier New", monospace;
@@ -104,10 +110,7 @@ body {
   margin: 0;
   font-family: var(--font-body);
   color: var(--ink);
-  background:
-    radial-gradient(1200px 800px at 18% -12%, var(--bg-glow-1) 0%, transparent 58%),
-    radial-gradient(920px 620px at 88% 10%, var(--bg-glow-2) 0%, transparent 58%),
-    linear-gradient(180deg, color-mix(in srgb, var(--bg) 90%, white), var(--bg));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 90%, white), var(--bg));
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -524,24 +527,125 @@ a {
   gap: 0.7rem;
 }
 
-.home-header {
-  border-bottom-color: transparent;
-  background: color-mix(in srgb, var(--nav-bg) 86%, transparent);
+.site-header {
+  border-bottom: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
 }
 
-.home-header-nav {
-  opacity: 0.48;
-  transform: translateY(1px);
+.site-header-inner {
+  position: relative;
 }
 
-.home-header-nav a {
+.header-brand {
+  min-width: 0;
+}
+
+.header-wordmark {
+  display: block;
+  transition: transform 0.18s ease, filter 0.2s ease;
+}
+
+[data-theme="dark"] .header-wordmark {
+  filter: invert(1) hue-rotate(180deg) brightness(1.08) contrast(1.02);
+}
+
+.header-brand:hover .header-wordmark,
+.header-brand:focus-visible .header-wordmark {
+  transform: translateY(-1px) scale(1.03);
+}
+
+.header-nav {
+  gap: clamp(1.2rem, 2vw, 2rem);
+  justify-self: center;
+}
+
+.header-nav-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--ink);
+  font-family: var(--font-nav);
+  font-size: clamp(1rem, 0.95vw + 0.42rem, 1.12rem);
+  font-weight: 600;
+  letter-spacing: 0.01em;
   transition:
-    opacity 0.18s ease,
+    transform 0.18s ease,
+    color 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.header-nav-link:hover {
+  transform: translateY(-1px) scale(1.16);
+  color: var(--ink);
+}
+
+.header-nav-link.is-active {
+  color: var(--ink);
+}
+
+.header-actions {
+  gap: 0.625rem;
+}
+
+.header-icon-button {
+  color: var(--ink);
+  border: 1px solid transparent;
+  background: transparent;
+  transition:
+    transform 0.18s ease,
     color 0.18s ease;
 }
 
-.home-header-nav:hover {
-  opacity: 0.88;
+.header-icon-button:hover {
+  transform: translateY(-1px);
+}
+
+.header-utility-button {
+  color: color-mix(in srgb, var(--ink-soft) 88%, var(--ink));
+}
+
+.header-utility-button:hover,
+.header-utility-button:focus-visible {
+  color: var(--ink);
+}
+
+.header-minimal-icon:hover,
+.header-minimal-icon:focus-visible {
+  transform: translateY(-1px) scale(1.16);
+  color: var(--ink);
+}
+
+.header-publish-button {
+  box-shadow: none;
+}
+
+.header-avatar-trigger {
+  background: transparent;
+  transition: transform 0.18s ease;
+}
+
+.header-avatar-trigger:hover,
+.header-avatar-trigger:focus-visible,
+.header-avatar-trigger[data-state="open"] {
+  transform: translateY(-1px);
+}
+
+.header-avatar-tooltip {
+  border-radius: 16px;
+  padding: 0.8rem 0.95rem;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+}
+
+[data-theme="dark"] .header-utility-button:hover,
+[data-theme="dark"] .header-utility-button:focus-visible {
+  color: var(--ink);
+}
+
+.home-header {
+  background: transparent;
 }
 
 code {
@@ -1160,6 +1264,7 @@ html.theme-transition::view-transition-new(theme) {
     /* biome-ignore lint/complexity/noImportantStyles: reduce-motion override */
     animation: none !important;
   }
+
 }
 
 /* Security Scan Results */

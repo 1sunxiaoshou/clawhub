@@ -7,6 +7,9 @@ import Header from "../components/Header";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: (props: { children: ReactNode }) => <a href="/">{props.children}</a>,
+  useLocation: () => ({
+    pathname: "/",
+  }),
 }));
 
 vi.mock("@convex-dev/auth/react", () => ({
@@ -88,5 +91,12 @@ describe("Header", () => {
     render(<Header />);
 
     expect(screen.queryByText("Packages")).toBeNull();
+  });
+
+  it("renders icon-only github sign-in control when signed out", () => {
+    render(<Header />);
+
+    expect(screen.getByRole("button", { name: /github/i })).toBeTruthy();
+    expect(screen.queryByText("使用 GitHub 登录")).toBeNull();
   });
 });

@@ -2,8 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 export type Locale = "zh-CN" | "en";
 
-const LOCALE_KEY = "clawhub-locale";
-const DEFAULT_LOCALE: Locale = "en";
+export const LOCALE_KEY = "clawhub-locale";
+export const DEFAULT_LOCALE: Locale = "en";
 
 const messages = {
   "zh-CN": {
@@ -33,9 +33,20 @@ const messages = {
     home: {
       heroBadge: "Deep AI Worker 官方技能市场",
       heroTitle: "数据能力，不该散落在流程里。",
+      heroTitleLargeTop: "连接数据与 AI 的",
+      heroTitleLargeBottom: "下一代技能引擎",
       heroDescription: "Deep Skill Hub 是面向数据团队与 AI workflow 的技能市场，让可复用的数据能力被整理、被浏览，也被真正采用。",
+      posterGlyph: "炼",
+      posterDescription: "潜入知识的深海，让沉淀的经验化作开箱即用的 AI 技能。",
       browseSkills: "进入技能市场",
       publishSkill: "发布技能",
+      publishMySkill: "发布我的技能",
+      featureReadyTitle: "开箱即用",
+      featureReadyBody: "海量官方与社区维护的数据处理组件，一键安装到你的 AI Agent 与 Workflow 中，拒绝重复造轮子。",
+      featureIntegrateTitle: "无缝集成",
+      featureIntegrateBody: "遵循标准协议，提供标准输入输出接口。支持各类编程语言及可视化连线平台调用，原生适配 Deep AI 生态。",
+      featureDataTitle: "数据沉淀",
+      featureDataBody: "为企业提供私有化技能空间，将团队内的 SQL 脚本、数据清洗逻辑转化为规范的可复用资产。",
       explainKicker: "这是什么",
       explainTitle: "把零散的数据能力，组织成可浏览的市场。",
       explainBody: "数据团队的真实能力，常常散落在脚本、流程、文档和个人经验里。Deep Skill Hub 把这些能力整理成可发现、可复用、可进入工作流的 skills，让浏览和采用更直接。",
@@ -43,10 +54,18 @@ const messages = {
       soulsHeroBadge: "SOUL.md，共享于此。",
       soulsHeroTitle: "SoulHub，系统人格与设定的归档地。",
       soulsHeroDescription: "分享 SOUL.md bundle，像文档一样版本化，把个人系统 lore 放到一个公开的地方。",
+      soulsHeroBadgeLarge: "探索 Souls 全球生态",
+      soulsHeroTitleLarge: "寻找你所需的灵魂组件",
+      soulsHeroDescriptionLarge: "在海量的高质量 Souls 库中检索，加速你的创意落地与 AI 构想。",
       publishSoul: "发布 Soul",
       browseSouls: "浏览 Souls",
+      soulsSearchPlaceholderLarge: "搜索名称、描述或标签...",
       soulsSearchPlaceholder: "搜索 souls、提示词或 lore",
       soulsHeroPanelTitle: "搜索 souls。版本可追踪，内容可阅读，也便于 remix。",
+      latestSoulsLarge: "最新 Souls 组件",
+      latestSoulsLargeDescription: "探索社区刚刚分享的创意火花",
+      seeAllSoulsLarge: "查看全部",
+      soulsFallbackSummaryLarge: "暂无描述信息",
       latestSouls: "最新 Souls",
       latestSoulsDescription: "Hub 中最新发布的 SOUL.md bundle。",
       seeAllSouls: "查看全部 Souls",
@@ -667,9 +686,20 @@ const messages = {
     home: {
       heroBadge: "Official skill marketplace for Deep AI Worker",
       heroTitle: "Data capability should not live in scattered workflows.",
+      heroTitleLargeTop: "The next-generation engine",
+      heroTitleLargeBottom: "for data and AI",
       heroDescription: "Deep Skill Hub is a skill marketplace for data teams and AI workflows, where reusable data capability can be organized, browsed, and adopted with intent.",
+      posterGlyph: "Refine",
+      posterDescription: "Dive into the deep sea of knowledge and turn accumulated experience into AI skills ready to use out of the box.",
       browseSkills: "Browse Skills",
       publishSkill: "Publish Skill",
+      publishMySkill: "Publish My Skill",
+      featureReadyTitle: "Ready out of the box",
+      featureReadyBody: "A large library of official and community-maintained data components, ready to install into your AI agents and workflows without rebuilding the same tools again.",
+      featureIntegrateTitle: "Integrates cleanly",
+      featureIntegrateBody: "Standard interfaces, predictable inputs and outputs, and native fit for Deep AI workflows across code and visual orchestration tools.",
+      featureDataTitle: "Turns work into assets",
+      featureDataBody: "Give teams a private skill space where SQL scripts and data-cleaning logic become reusable, structured assets instead of one-off operational knowledge.",
       explainKicker: "What it is",
       explainTitle: "Turn fragmented data capability into a browsable marketplace.",
       explainBody: "Real data capability often ends up scattered across scripts, workflows, docs, and personal habits. Deep Skill Hub organizes that capability into skills that can be discovered, reused, and brought into a working flow more directly.",
@@ -677,10 +707,18 @@ const messages = {
       soulsHeroBadge: "SOUL.md, shared.",
       soulsHeroTitle: "SoulHub, where system lore lives.",
       soulsHeroDescription: "Share SOUL.md bundles, version them like docs, and keep personal system lore in one public place.",
+      soulsHeroBadgeLarge: "Explore the global Souls ecosystem",
+      soulsHeroTitleLarge: "Find the soul component you need",
+      soulsHeroDescriptionLarge: "Search across a large, high-quality Souls library and accelerate the jump from idea to execution.",
       publishSoul: "Publish Soul",
       browseSouls: "Browse souls",
+      soulsSearchPlaceholderLarge: "Search by name, description, or tag...",
       soulsSearchPlaceholder: "Search souls, prompts, or lore",
       soulsHeroPanelTitle: "Search souls. Versioned, readable, easy to remix.",
+      latestSoulsLarge: "Latest soul components",
+      latestSoulsLargeDescription: "Fresh creative building blocks shared by the community.",
+      seeAllSoulsLarge: "See all",
+      soulsFallbackSummaryLarge: "No description available.",
       latestSouls: "Latest souls",
       latestSoulsDescription: "Newest SOUL.md bundles across the hub.",
       seeAllSouls: "See all souls",
@@ -1302,22 +1340,70 @@ const defaultContextValue: I18nContextValue = {
 
 const I18nContext = createContext<I18nContextValue>(defaultContextValue);
 
-function getStoredLocale(): Locale {
-  if (typeof window === "undefined") return DEFAULT_LOCALE;
-  const stored = window.localStorage.getItem(LOCALE_KEY);
-  return stored === "zh-CN" || stored === "en" ? (stored as Locale) : getBrowserLocale();
+export function isLocale(value: string | null | undefined): value is Locale {
+  return value === "zh-CN" || value === "en";
 }
 
-function getBrowserLocale(): Locale {
+export function getBrowserLocale(): Locale {
   if (typeof navigator === "undefined") return DEFAULT_LOCALE;
   const preferredLanguages = navigator.languages?.length ? navigator.languages : [navigator.language];
   return preferredLanguages.some((value) => value.toLowerCase().startsWith("zh")) ? "zh-CN" : "en";
+}
+
+export function getStoredLocale(): Locale {
+  if (typeof window === "undefined") return DEFAULT_LOCALE;
+  const stored = window.localStorage.getItem(LOCALE_KEY);
+  return isLocale(stored) ? stored : getBrowserLocale();
+}
+
+function parseAcceptLanguage(header: string | null | undefined): Locale {
+  if (!header) return DEFAULT_LOCALE;
+
+  const preferences = header
+    .split(",")
+    .map((entry, index) => {
+      const [languageTag, ...params] = entry.trim().split(";");
+      const qParam = params.find((param) => param.trim().startsWith("q="));
+      const qValue = qParam ? Number.parseFloat(qParam.trim().slice(2)) : 1;
+
+      return {
+        languageTag: languageTag.toLowerCase(),
+        quality: Number.isFinite(qValue) ? qValue : 0,
+        index,
+      };
+    })
+    .filter((entry) => entry.languageTag.length > 0)
+    .sort((a, b) => {
+      if (b.quality !== a.quality) return b.quality - a.quality;
+      return a.index - b.index;
+    });
+
+  for (const entry of preferences) {
+    if (entry.languageTag.startsWith("zh")) return "zh-CN";
+    if (entry.languageTag.startsWith("en")) return "en";
+  }
+
+  return DEFAULT_LOCALE;
+}
+
+export function resolveInitialLocale(args?: {
+  cookieLocale?: string | null;
+  acceptLanguage?: string | null;
+}): Locale {
+  if (isLocale(args?.cookieLocale)) return args.cookieLocale;
+  return parseAcceptLanguage(args?.acceptLanguage);
 }
 
 function applyLocale(locale: Locale) {
   if (typeof document === "undefined") return;
   document.documentElement.lang = locale;
   document.documentElement.dataset.locale = locale;
+}
+
+function persistLocale(locale: Locale) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCALE_KEY, locale);
+  document.cookie = `${LOCALE_KEY}=${encodeURIComponent(locale)}; Path=/; Max-Age=31536000; SameSite=Lax`;
 }
 
 function getMessage(locale: Locale, key: MessageKey, count?: number) {
@@ -1345,21 +1431,19 @@ function interpolate(template: string, params?: Record<string, string | number>)
   return template.replaceAll(/\{(\w+)\}/g, (_, key: string) => String(params[key] ?? `{${key}}`));
 }
 
-export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE);
-  const [hasMounted, setHasMounted] = useState(false);
-
-  useEffect(() => {
-    const preferredLocale = getStoredLocale();
-    setLocaleState((current) => (current === preferredLocale ? current : preferredLocale));
-    setHasMounted(true);
-  }, []);
+export function I18nProvider({
+  children,
+  initialLocale = DEFAULT_LOCALE,
+}: {
+  children: React.ReactNode;
+  initialLocale?: Locale;
+}) {
+  const [locale, setLocaleState] = useState<Locale>(initialLocale);
 
   useEffect(() => {
     applyLocale(locale);
-    if (!hasMounted || typeof window === "undefined") return;
-    window.localStorage.setItem(LOCALE_KEY, locale);
-  }, [hasMounted, locale]);
+    persistLocale(locale);
+  }, [locale]);
 
   const contextValue = useMemo<I18nContextValue>(
     () => ({

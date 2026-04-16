@@ -1,5 +1,6 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import type { ComponentProps } from "react";
+import { toast } from "sonner";
 import { getUserFacingAuthError } from "../lib/authErrorMessage";
 import { useI18n } from "../lib/i18n";
 import { clearAuthError, setAuthError } from "../lib/useAuthError";
@@ -18,6 +19,7 @@ export function SignInButton({
 }: SignInButtonProps) {
   const { signIn } = useAuthActions();
   const { t } = useI18n();
+  const fallbackMessage = "Sign in failed. Please try again.";
 
   return (
     <Button
@@ -26,15 +28,9 @@ export function SignInButton({
         clearAuthError();
         const next = redirectTo ?? getCurrentRelativeUrl();
         void signIn("github", next ? { redirectTo: next } : undefined)
-          .then((result) => {
-            if (result?.signingIn === false) {
-              setAuthError("Sign in failed. Please try again.");
-            }
-          })
           .catch((error) => {
-            setAuthError(
-              getUserFacingAuthError(error, "Sign in failed. Please try again."),
-            );
+            const message = getUserFacingAuthError(error, fallbackMessage);
+            reportAuthError(message);
           });
       }}
       {...props}
@@ -47,4 +43,12 @@ export function SignInButton({
 function getCurrentRelativeUrl() {
   if (typeof window === "undefined") return "/";
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+function reportAuthError(message: string) {
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/cli/auth")) {
+    setAuthError(message);
+    return;
+  }
+  toast.error(message);
 }

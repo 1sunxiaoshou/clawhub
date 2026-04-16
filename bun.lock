@@ -10,8 +10,10 @@
         "@create-markdown/core": "^2.0.2",
         "@create-markdown/preview": "^2.0.2",
         "@fontsource/bricolage-grotesque": "^5.2.10",
+        "@fontsource/chakra-petch": "^5.2.7",
         "@fontsource/ibm-plex-mono": "^5.2.7",
         "@fontsource/manrope": "^5.2.8",
+        "@fontsource/noto-sans-sc": "^5.2.9",
         "@monaco-editor/react": "^4.7.0",
         "@radix-ui/react-avatar": "^1.1.11",
         "@radix-ui/react-dialog": "^1.1.15",
@@ -261,9 +263,13 @@
 
     "@fontsource/bricolage-grotesque": ["@fontsource/bricolage-grotesque@5.2.10", "", {}, "sha512-V2xS+1P7C8IrSypXLUx/bLtX/LsTlYtV2k2CsU+S/0t8qepZ2hvKSlyJIx7Ub/iY8Bbnj+IjAuUF9nvFz+BbIg=="],
 
+    "@fontsource/chakra-petch": ["@fontsource/chakra-petch@5.2.7", "", {}, "sha512-GLbun5WZJNAEc8FtWxwcgo+4Kurqdwejvf671l+YfIjyQgPvTjyxXYP7Ffg2HAY89NGnp3oOvKQjRzfm/fBECw=="],
+
     "@fontsource/ibm-plex-mono": ["@fontsource/ibm-plex-mono@5.2.7", "", {}, "sha512-MKAb8qV+CaiMQn2B0dIi1OV3565NYzp3WN5b4oT6LTkk+F0jR6j0ZN+5BKJiIhffDC3rtBULsYZE65+0018z9w=="],
 
     "@fontsource/manrope": ["@fontsource/manrope@5.2.8", "", {}, "sha512-gJHJmcuUk7qWcNCfcAri/DJQtXtBYqi9yKratr4jXhSo0I3xUtNNKI+igQIcw5c+m95g0vounk8ZnX/kb8o0TA=="],
+
+    "@fontsource/noto-sans-sc": ["@fontsource/noto-sans-sc@5.2.9", "", {}, "sha512-bTUIWGBgJDpwi5qAr+x0/lcgv80IHTB9vl6s2f6EymZEa7qYV99yNRBZuKFT+SYDKVunZrjCEhWtpxqmbXWl5Q=="],
 
     "@jridgewell/gen-mapping": ["@jridgewell/gen-mapping@0.3.13", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.0", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA=="],
 

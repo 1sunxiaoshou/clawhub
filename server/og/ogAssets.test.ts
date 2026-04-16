@@ -23,10 +23,10 @@ describe("ogAssets", () => {
   it("falls back to the packaged public mark asset", async () => {
     readFileMock.mockImplementation(async (input: unknown) => {
       const path = String(input);
-      if (path.includes("public/clawd-mark.png")) {
+      if (path.includes("public/deepdata-logo.png")) {
         return Buffer.from("png");
       }
-      if (path.includes("clawd-mark.png")) {
+      if (path.includes("deepdata-logo.png")) {
         throw new Error("missing root mark");
       }
       throw new Error(`unexpected read: ${path}`);
@@ -36,8 +36,8 @@ describe("ogAssets", () => {
 
     await expect(getMarkDataUrl()).resolves.toBe("data:image/png;base64,cG5n");
     expect(readFileMock).toHaveBeenCalledTimes(2);
-    expect(String(readFileMock.mock.calls[0]?.[0])).toContain("clawd-mark.png");
-    expect(String(readFileMock.mock.calls[1]?.[0])).toContain("public/clawd-mark.png");
+    expect(String(readFileMock.mock.calls[0]?.[0])).toContain("deepdata-logo.png");
+    expect(String(readFileMock.mock.calls[1]?.[0])).toContain("public/deepdata-logo.png");
   });
 
   it("initializes resvg wasm only once per process", async () => {

@@ -6,11 +6,36 @@ import { DeploymentDriftBanner } from "../components/DeploymentDriftBanner";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { Footer } from "../components/Footer";
 import Header from "../components/Header";
-import { useI18n } from "../lib/i18n";
+import { DEFAULT_LOCALE, LOCALE_KEY, resolveInitialLocale, useI18n } from "../lib/i18n";
 import { getSiteDescription, getSiteMode, getSiteName, getSiteUrlForMode } from "../lib/site";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
+  loader: async () => {
+    if (import.meta.env.SSR) {
+      const serverRuntimeModule = "@tanstack/react-start/server";
+      const { getCookie, getRequestHeaders } = (await import(/* @vite-ignore */ serverRuntimeModule)) as {
+        getCookie: (name: string) => string | undefined;
+        getRequestHeaders: () => Headers;
+      };
+
+      return {
+        initialLocale: resolveInitialLocale({
+          cookieLocale: getCookie(LOCALE_KEY),
+          acceptLanguage: getRequestHeaders().get("accept-language"),
+        }),
+      };
+    }
+
+    const locale =
+      typeof document !== "undefined" && document.documentElement.lang
+        ? resolveInitialLocale({ cookieLocale: document.documentElement.lang })
+        : DEFAULT_LOCALE;
+
+    return {
+      initialLocale: locale,
+    };
+  },
   head: () => {
     const mode = getSiteMode();
     const siteName = getSiteName(mode);
@@ -118,8 +143,10 @@ export const Route = createRootRoute({
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  const { initialLocale } = Route.useLoaderData();
+
   return (
-    <AppProviders>
+    <AppProviders initialLocale={initialLocale}>
       <InnerRootDocument>{children}</InnerRootDocument>
     </AppProviders>
   );
