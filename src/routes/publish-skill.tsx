@@ -22,6 +22,7 @@ import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { getSiteMode } from "../lib/site";
 import { getPublicSlugCollision } from "../lib/slugCollision";
+import { deriveSkillUploadDefaults } from "../lib/skillUploadDefaults";
 import { expandDroppedItems, expandFilesWithReport } from "../lib/uploadFiles";
 import { useI18n } from "../lib/i18n";
 import { useAuthStatus } from "../lib/useAuthStatus";
@@ -366,6 +367,12 @@ export function Upload() {
     const report = await expandFilesWithReport(selected);
     setFiles(report.files);
     setIgnoredMacJunkPaths(report.ignoredMacJunkPaths);
+    const defaults = await deriveSkillUploadDefaults(report.files);
+    if (!slug.trim() && defaults.slug) setSlug(defaults.slug);
+    if (!displayName.trim() && defaults.displayName) setDisplayName(defaults.displayName);
+    if ((!version.trim() || version.trim() === "1.0.0") && defaults.version) {
+      setVersion(defaults.version);
+    }
   }
 
   async function handleSubmit(event: React.FormEvent) {

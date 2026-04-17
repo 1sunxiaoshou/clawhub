@@ -122,12 +122,12 @@ export default function Header() {
           {t("header.stars")}
         </Link>
       ) : null}
-      {!isHomePage && isStaff ? (
+      {isStaff ? (
         <Link to="/import" className={navLinkClass(isPathActive("/import"))}>
           {t("header.import")}
         </Link>
       ) : null}
-      {!isHomePage && isStaff ? (
+      {isStaff ? (
         <Link to="/management" search={{ skill: undefined }} className={navLinkClass(isPathActive("/management"))}>
           {t("header.management")}
         </Link>
