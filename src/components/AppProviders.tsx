@@ -5,6 +5,7 @@ import { convex } from "../convex/client";
 import { getUserFacingAuthError, normalizeAuthErrorMessage } from "../lib/authErrorMessage";
 import { I18nProvider, type Locale } from "../lib/i18n";
 import { clearAuthError, setAuthError } from "../lib/useAuthError";
+import { TooltipProvider } from "./ui/tooltip";
 import { UserBootstrap } from "./UserBootstrap";
 
 function getPendingAuthCode() {
@@ -88,12 +89,14 @@ export function AppProviders({
 }) {
   return (
     <ConvexAuthProvider client={convex} shouldHandleCode={false}>
-      <I18nProvider initialLocale={initialLocale}>
-        <AuthCodeHandler />
-        <AuthErrorHandler />
-        <UserBootstrap />
-        {children}
-      </I18nProvider>
+      <TooltipProvider delayDuration={120}>
+        <I18nProvider initialLocale={initialLocale}>
+          <AuthCodeHandler />
+          <AuthErrorHandler />
+          <UserBootstrap />
+          {children}
+        </I18nProvider>
+      </TooltipProvider>
     </ConvexAuthProvider>
   );
 }

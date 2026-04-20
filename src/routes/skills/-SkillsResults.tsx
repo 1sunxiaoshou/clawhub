@@ -1,13 +1,12 @@
-import { Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import type { RefObject } from "react";
 import { EmptyState } from "../../components/EmptyState";
+import { SkillListItem } from "../../components/SkillListItem";
 import { useI18n } from "../../lib/i18n";
 import { SkillCardSkeletonGrid } from "../../components/skeletons/SkillCardSkeleton";
 import { SkillCard } from "../../components/SkillCard";
 import { getPlatformLabels } from "../../components/skillDetailUtils";
-import { SkillMetricsRow, SkillStatsTripletLine } from "../../components/SkillStats";
-import { Badge } from "../../components/ui/badge";
+import { SkillStatsTripletLine } from "../../components/SkillStats";
 import { Button } from "../../components/ui/button";
 import { UserBadge } from "../../components/UserBadge";
 import { getSkillBadges } from "../../lib/badges";
@@ -50,7 +49,7 @@ export function SkillsResults({
           description={hasQuery ? t("skills.tryAdjusting") : undefined}
         />
       ) : view === "cards" ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-5">
+        <div className="skills-card-grid">
           {sorted.map((entry) => {
             const skill = entry.skill;
             const clawdis = entry.latestVersion?.parsed?.clawdis;
@@ -68,16 +67,16 @@ export function SkillsResults({
                 platformLabels={platforms.length ? platforms : undefined}
                 summaryFallback={t("skills.fallbackSummary")}
                 meta={
-                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                  <div className="skill-card-footer-rows">
                     <UserBadge
                       user={entry.owner}
                       fallbackHandle={ownerHandle}
                       prefix={t("common.by")}
                       link={false}
                     />
-                    <span className="inline-flex items-center whitespace-nowrap text-[0.8rem] text-[color:var(--ink-soft)]">
+                    <div className="stat">
                       <SkillStatsTripletLine stats={skill.stats} />
-                    </span>
+                    </div>
                   </div>
                 }
               />
@@ -85,59 +84,17 @@ export function SkillsResults({
           })}
         </div>
       ) : (
-        /* List view */
-        <div className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--line)]">
-          {/* Table header */}
-          <div className="grid grid-cols-[minmax(160px,1.2fr)_minmax(120px,1.6fr)_minmax(100px,0.8fr)_minmax(120px,1fr)] gap-4 border-b border-[color:var(--line)] bg-[color:var(--surface-muted)] px-5 py-3 text-xs font-bold uppercase tracking-wider text-[color:var(--ink-soft)]">
-            <span>{t("skills.tableHeader.skill")}</span>
-            <span>{t("skills.tableHeader.summary")}</span>
-            <span>{t("skills.tableHeader.author")}</span>
-            <span className="text-right">{t("skills.tableHeader.stats")}</span>
-          </div>
-          {sorted.map((entry, i) => {
+        <div className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--line)] bg-[color:var(--surface)]">
+          {sorted.map((entry) => {
             const skill = entry.skill;
             const ownerHandle = entry.owner?.handle ?? entry.ownerHandle ?? null;
-            const skillHref = buildSkillHref(skill, ownerHandle);
             return (
-              <Link
+              <SkillListItem
                 key={skill._id}
-                className={`grid grid-cols-[minmax(160px,1.2fr)_minmax(120px,1.6fr)_minmax(100px,0.8fr)_minmax(120px,1fr)] items-center gap-4 px-5 py-3.5 no-underline transition-colors hover:bg-[color:var(--surface-muted)] ${
-                  i % 2 === 0 ? "bg-[color:var(--surface)]" : "bg-[color:var(--bg-soft)]"
-                }`}
-                to={skillHref}
-              >
-                <span className="flex flex-col gap-1">
-                  <span className="flex items-center gap-2">
-                    <span className="font-semibold text-[color:var(--ink)]">
-                      {skill.displayName}
-                    </span>
-                    {getSkillBadges(skill).map((badge) => (
-                      <Badge key={badge} variant="compact">
-                        {badge}
-                      </Badge>
-                    ))}
-                  </span>
-                  {entry.latestVersion?.version ? (
-                    <span className="font-mono text-xs text-[color:var(--ink-soft)]">
-                      v{entry.latestVersion.version}
-                    </span>
-                  ) : null}
-                </span>
-                <span className="truncate text-sm text-[color:var(--ink-soft)]">
-                  {skill.summary ?? t("skills.noSummary")}
-                </span>
-                <span className="text-sm">
-                  <UserBadge
-                    user={entry.owner}
-                    fallbackHandle={ownerHandle}
-                    prefix=""
-                    link={false}
-                  />
-                </span>
-                <span className="flex flex-wrap justify-end gap-3 text-xs text-[color:var(--ink-soft)]">
-                  <SkillMetricsRow stats={skill.stats} />
-                </span>
-              </Link>
+                skill={skill}
+                ownerHandle={ownerHandle}
+                owner={entry.owner}
+              />
             );
           })}
         </div>

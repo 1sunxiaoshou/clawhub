@@ -1,7 +1,7 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { CircleUserRound, Languages, Menu, Moon, Plus, Sun } from "lucide-react";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { gravatarUrl } from "../lib/gravatar";
 import { useI18n } from "../lib/i18n";
 import { isModerator } from "../lib/roles";
@@ -19,7 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 
 export default function Header() {
@@ -65,6 +65,7 @@ export default function Header() {
 
   const themeLabel = mode === "light" ? t("header.lightTheme") : t("header.darkTheme");
   const ThemeIcon = mode === "light" ? Sun : Moon;
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isPathActive = (href: string) =>
     href === "/" ? location.pathname === href : location.pathname === href || location.pathname.startsWith(`${href}/`);
@@ -173,7 +174,7 @@ export default function Header() {
           ) : null}
 
           <div className="md:hidden">
-            <Sheet>
+            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label={t("header.openMenu")}>
                   <Menu className="h-5 w-5" />
@@ -183,7 +184,86 @@ export default function Header() {
                 <SheetHeader>
                   <SheetTitle>{siteName}</SheetTitle>
                 </SheetHeader>
-                <nav className="mt-6 flex flex-col gap-4">{navLinks}</nav>
+                <nav className="mt-6 flex flex-col gap-4">
+                  <SheetClose asChild>
+                    <Link
+                      to="/"
+                      search={{ q: undefined, highlighted: undefined, search: undefined }}
+                      className={navLinkClass(isPathActive("/"))}
+                    >
+                      {t("header.home")}
+                    </Link>
+                  </SheetClose>
+                  {isSoulMode ? (
+                    <SheetClose asChild>
+                      <a href={clawHubUrl} className={navLinkClass(false)}>
+                        ClawHub
+                      </a>
+                    </SheetClose>
+                  ) : null}
+                  <SheetClose asChild>
+                    <Link
+                      to={isSoulMode ? "/souls" : "/skills"}
+                      search={
+                        isSoulMode
+                          ? {
+                              q: undefined,
+                              sort: undefined,
+                              dir: undefined,
+                              view: undefined,
+                              focus: undefined,
+                            }
+                          : {
+                              q: undefined,
+                              sort: undefined,
+                              dir: undefined,
+                              highlighted: undefined,
+                              nonSuspicious: undefined,
+                              view: undefined,
+                              focus: undefined,
+                            }
+                      }
+                      className={navLinkClass(isPathActive(isSoulMode ? "/souls" : "/skills"))}
+                    >
+                      {isSoulMode ? t("header.souls") : t("header.skills")}
+                    </Link>
+                  </SheetClose>
+                  {!isSoulMode ? (
+                    <SheetClose asChild>
+                      <Link
+                        to="/plugins"
+                        className={navLinkClass(isPathActive("/plugins"))}
+                      >
+                        {t("header.plugins")}
+                      </Link>
+                    </SheetClose>
+                  ) : null}
+                  {me ? (
+                    <SheetClose asChild>
+                      <Link to="/stars" className={navLinkClass(isPathActive("/stars"))}>
+                        {t("header.stars")}
+                      </Link>
+                    </SheetClose>
+                  ) : null}
+                  {isStaff ? (
+                    <SheetClose asChild>
+                      <Link to="/import" className={navLinkClass(isPathActive("/import"))}>
+                        {t("header.import")}
+                      </Link>
+                    </SheetClose>
+                  ) : null}
+                  {isStaff ? (
+                    <SheetClose asChild>
+                      <Link
+                        to="/management"
+                        search={{ skill: undefined }}
+                        className={navLinkClass(isPathActive("/management"))}
+                      >
+                        {t("header.management")}
+                      </Link>
+                    </SheetClose>
+                  ) : null}
+                </nav>
                 <div className="mt-6 flex flex-col gap-2">
                   <span className="text-xs font-bold uppercase tracking-widest text-[color:var(--ink-soft)]">
                     {t("header.theme")}
@@ -208,14 +288,58 @@ export default function Header() {
                 </div>
                 {isAuthenticated && me ? (
                   <div className="mt-6">
-                    <Link to="/publish-skill" search={{ updateSlug: undefined }}>
-                      <Button variant="primary" className="w-full rounded-full">
-                        <Plus className="h-4 w-4" />
-                        {t("header.publishSkill")}
-                      </Button>
-                    </Link>
+                    <SheetClose asChild>
+                      <Link to="/publish-skill" search={{ updateSlug: undefined }}>
+                        <Button variant="primary" className="w-full rounded-full">
+                          <Plus className="h-4 w-4" />
+                          {t("header.publishSkill")}
+                        </Button>
+                      </Link>
+                    </SheetClose>
                   </div>
                 ) : null}
+                <div className="mt-6 flex flex-col gap-2 border-t border-border/20 pt-6">
+                  <span className="text-xs font-bold uppercase tracking-widest text-[color:var(--ink-soft)]">
+                    {displayName}
+                  </span>
+                  {isAuthenticated && me ? (
+                    <>
+                      <SheetClose asChild>
+                        <Link to="/dashboard">
+                          <Button variant="outline" className="w-full justify-start rounded-full">
+                            {t("header.dashboard")}
+                          </Button>
+                        </Link>
+                      </SheetClose>
+                      <SheetClose asChild>
+                        <Link to="/settings">
+                          <Button variant="outline" className="w-full justify-start rounded-full">
+                            {t("header.settings")}
+                          </Button>
+                        </Link>
+                      </SheetClose>
+                      <Button
+                        variant="ghost"
+                        type="button"
+                        className="w-full justify-start rounded-full text-red-500 hover:text-red-600"
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          void signOut();
+                        }}
+                      >
+                        {t("header.signOut")}
+                      </Button>
+                    </>
+                  ) : (
+                    <SignInButton
+                      variant="outline"
+                      className="w-full justify-center rounded-full"
+                      aria-label={t("header.signInWithGitHub")}
+                    >
+                      {t("header.signIn")}
+                    </SignInButton>
+                  )}
+                </div>
               </SheetContent>
             </Sheet>
           </div>
