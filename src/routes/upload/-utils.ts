@@ -1,5 +1,6 @@
 import { isTextContentType, TEXT_FILE_EXTENSION_SET } from "clawhub-schema/textFiles";
 import { getUserFacingConvexError } from "../../lib/convexError";
+import { sha256Hex } from "../../lib/sha256";
 
 export async function uploadFile(uploadUrl: string, file: File) {
   const response = await fetch(uploadUrl, {
@@ -19,11 +20,7 @@ export async function hashFile(file: File) {
     typeof file.arrayBuffer === "function"
       ? await file.arrayBuffer()
       : await new Response(file).arrayBuffer();
-  const hash = await crypto.subtle.digest("SHA-256", new Uint8Array(buffer));
-  const bytes = new Uint8Array(hash);
-  return Array.from(bytes)
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  return sha256Hex(buffer);
 }
 
 export function formatBytes(bytes: number) {

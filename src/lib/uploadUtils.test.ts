@@ -78,4 +78,32 @@ describe("uploadUtils", () => {
     const digest = await hashFile(new File(["hello"], "x.txt"));
     expect(digest).toMatch(/^[0-9a-f]{64}$/);
   });
+
+  it("hashes files when crypto.subtle is unavailable", async () => {
+    const originalCrypto = globalThis.crypto;
+    const cryptoWithoutSubtle = Object.create(Object.getPrototypeOf(originalCrypto)) as Crypto & {
+      subtle?: SubtleCrypto;
+    };
+    Object.defineProperties(
+      cryptoWithoutSubtle,
+      Object.getOwnPropertyDescriptors(originalCrypto),
+    );
+    Object.defineProperty(globalThis, "crypto", {
+      configurable: true,
+      value: Object.defineProperty(cryptoWithoutSubtle, "subtle", {
+        configurable: true,
+        value: undefined,
+      }),
+    });
+
+    try {
+      const digest = await hashFile(new File(["hello"], "x.txt"));
+      expect(digest).toBe("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
+    } finally {
+      Object.defineProperty(globalThis, "crypto", {
+        configurable: true,
+        value: originalCrypto,
+      });
+    }
+  });
 });
