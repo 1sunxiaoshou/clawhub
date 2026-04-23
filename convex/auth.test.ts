@@ -3,6 +3,7 @@ import type { Id } from "./_generated/dataModel";
 import {
   BANNED_REAUTH_MESSAGE,
   DELETED_ACCOUNT_REAUTH_MESSAGE,
+  getLoginMethodForProvider,
   handleDeletedUserSignIn,
 } from "./auth";
 
@@ -137,5 +138,13 @@ describe("handleDeletedUserSignIn", () => {
     await expect(
       handleDeletedUserSignIn(ctx as never, { userId, existingUserId: userId }),
     ).rejects.toThrow(`${BANNED_REAUTH_MESSAGE} Reason: Chargeback fraud`);
+  });
+});
+
+describe("getLoginMethodForProvider", () => {
+  it("preserves concrete login methods", () => {
+    expect(getLoginMethodForProvider("password")).toBe("password");
+    expect(getLoginMethodForProvider("wecom")).toBe("wecom");
+    expect(getLoginMethodForProvider("github")).toBe("github");
   });
 });

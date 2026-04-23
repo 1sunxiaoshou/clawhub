@@ -112,7 +112,7 @@ export function Settings() {
         <Card>
           <CardContent className="flex flex-col items-start gap-3">
             <span>{t("settings.signInPrompt")}</span>
-            <SignInButton variant="outline">{t("settings.signInWithGitHub")}</SignInButton>
+            <SignInButton variant="outline">{t("header.signIn")}</SignInButton>
           </CardContent>
         </Card>
       </Container>
@@ -176,6 +176,18 @@ export function Settings() {
                 <div className="text-sm text-[color:var(--ink-soft)]">{me.email}</div>
               ) : null}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("auth.securityTitle")}</CardTitle>
+            <CardDescription>{t("auth.securityDescription")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild variant="outline">
+              <a href="/settings/security">{t("settings.manageSecurity")}</a>
+            </Button>
           </CardContent>
         </Card>
 

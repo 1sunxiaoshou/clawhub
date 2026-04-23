@@ -24,6 +24,14 @@ const users = defineTable({
   displayName: v.optional(v.string()),
   bio: v.optional(v.string()),
   role: v.optional(v.union(v.literal("admin"), v.literal("moderator"), v.literal("user"))),
+  primaryLoginMethod: v.optional(
+    v.union(v.literal("password"), v.literal("wecom"), v.literal("github")),
+  ),
+  lastLoginAt: v.optional(v.number()),
+  lastLoginMethod: v.optional(
+    v.union(v.literal("password"), v.literal("wecom"), v.literal("github")),
+  ),
+  passwordEnabled: v.optional(v.boolean()),
   githubCreatedAt: v.optional(v.number()),
   githubFetchedAt: v.optional(v.number()),
   githubProfileSyncedAt: v.optional(v.number()),

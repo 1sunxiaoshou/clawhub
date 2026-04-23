@@ -114,7 +114,7 @@ describe('Import route', () => {
 
     render(<ImportGitHub />);
 
-    expect(screen.getByRole('button', { name: /sign in with github/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /sign in/i })).toBeTruthy();
   });
 
   it('loads the skill preview and fills the defaults', async () => {

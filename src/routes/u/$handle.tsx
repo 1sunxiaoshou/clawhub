@@ -250,7 +250,7 @@ function InstalledSection(props: {
       <div className="flex flex-col gap-4">
         <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">{props.t("profile.installed.title")}</h2>
         <EmptyState title={props.t("profile.installed.signInPrompt")}>
-          <SignInButton variant="outline">{props.t("header.signInWithGitHub")}</SignInButton>
+          <SignInButton variant="outline">{props.t("header.signIn")}</SignInButton>
         </EmptyState>
       </div>
     );

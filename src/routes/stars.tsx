@@ -34,7 +34,7 @@ function Stars() {
             title={t("stars.signInTitle")}
             description={t("stars.signInDesc")}
           >
-            <SignInButton variant="outline">{t("header.signInWithGitHub")}</SignInButton>
+            <SignInButton variant="outline">{t("header.signIn")}</SignInButton>
           </EmptyState>
         </Container>
       </main>

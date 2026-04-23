@@ -16,6 +16,14 @@ vi.mock("@convex-dev/auth/react", () => ({
   useAuthActions: () => useAuthActionsMock(),
 }));
 
+vi.mock("@tanstack/react-router", async () => {
+  const actual = await vi.importActual<object>("@tanstack/react-router");
+  return {
+    ...actual,
+    useNavigate: () => vi.fn(),
+  };
+});
+
 describe("Settings", () => {
   beforeEach(() => {
     useQueryMock.mockReset();

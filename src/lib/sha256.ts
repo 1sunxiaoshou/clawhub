@@ -26,7 +26,7 @@ export async function sha256Hex(input: ArrayBuffer | Uint8Array) {
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
   const subtle = globalThis.crypto?.subtle;
   if (subtle) {
-    const digest = await subtle.digest('SHA-256', bytes);
+    const digest = await subtle.digest('SHA-256', new Uint8Array(bytes));
     return bytesToHex(new Uint8Array(digest));
   }
   return sha256HexFallback(bytes);

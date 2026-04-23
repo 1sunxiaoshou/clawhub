@@ -47,12 +47,13 @@ describe("SignInButton", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
-  it("starts GitHub sign-in with the current relative URL by default", async () => {
+  it("starts provider sign-in with the current relative URL", async () => {
     signInMock.mockResolvedValue({ signingIn: true });
 
-    render(<SignInButton>Sign in with GitHub</SignInButton>);
+    render(<SignInButton provider="github">Sign in with GitHub</SignInButton>);
     fireEvent.click(screen.getByRole("button", { name: "Sign in with GitHub" }));
 
     await waitFor(() => {
@@ -64,10 +65,26 @@ describe("SignInButton", () => {
     expect(setAuthErrorMock).not.toHaveBeenCalled();
   });
 
+  it("routes to the login page when no provider is specified", () => {
+    const assignMock = vi.fn();
+    vi.stubGlobal("location", {
+      assign: assignMock,
+      origin: "http://localhost",
+      pathname: "/skills",
+      search: "?q=test",
+      hash: "#top",
+    });
+    render(<SignInButton>Sign in</SignInButton>);
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(assignMock).toHaveBeenCalledWith("http://localhost/login?redirectTo=%2Fskills%3Fq%3Dtest%23top");
+    expect(signInMock).not.toHaveBeenCalled();
+  });
+
   it("does not surface an error when sign-in resolves without redirecting", async () => {
     signInMock.mockResolvedValue({ signingIn: false });
 
-    render(<SignInButton>Sign in with GitHub</SignInButton>);
+    render(<SignInButton provider="github">Sign in with GitHub</SignInButton>);
     fireEvent.click(screen.getByRole("button", { name: "Sign in with GitHub" }));
 
     await waitFor(() => {
@@ -84,7 +101,7 @@ describe("SignInButton", () => {
     signInMock.mockRejectedValue(failure);
     getUserFacingAuthErrorMock.mockReturnValue("GitHub auth unavailable");
 
-    render(<SignInButton>Sign in with GitHub</SignInButton>);
+    render(<SignInButton provider="github">Sign in with GitHub</SignInButton>);
     fireEvent.click(screen.getByRole("button", { name: "Sign in with GitHub" }));
 
     await waitFor(() => {
@@ -103,7 +120,7 @@ describe("SignInButton", () => {
     getUserFacingAuthErrorMock.mockReturnValue("GitHub auth unavailable");
     window.history.replaceState(null, "", "/cli/auth?state=123");
 
-    render(<SignInButton>Sign in with GitHub</SignInButton>);
+    render(<SignInButton provider="github">Sign in with GitHub</SignInButton>);
     fireEvent.click(screen.getByRole("button", { name: "Sign in with GitHub" }));
 
     await waitFor(() => {

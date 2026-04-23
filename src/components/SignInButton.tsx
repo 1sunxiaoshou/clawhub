@@ -9,10 +9,12 @@ import { Button } from "./ui/button";
 type ButtonProps = ComponentProps<typeof Button>;
 
 type SignInButtonProps = Omit<ButtonProps, "onClick" | "type"> & {
+  provider?: "github" | "wecom";
   redirectTo?: string;
 };
 
 export function SignInButton({
+  provider,
   redirectTo,
   children,
   ...props
@@ -25,9 +27,19 @@ export function SignInButton({
     <Button
       type="button"
       onClick={() => {
-        clearAuthError();
         const next = redirectTo ?? getCurrentRelativeUrl();
-        void signIn("github", next ? { redirectTo: next } : undefined)
+        if (!provider) {
+          if (typeof window !== "undefined") {
+            const loginUrl = new URL("/login", window.location.origin);
+            if (next) {
+              loginUrl.searchParams.set("redirectTo", next);
+            }
+            window.location.assign(loginUrl.toString());
+          }
+          return;
+        }
+        clearAuthError();
+        void signIn(provider, next ? { redirectTo: next } : undefined)
           .catch((error) => {
             const message = getUserFacingAuthError(error, fallbackMessage);
             reportAuthError(message);
@@ -35,7 +47,7 @@ export function SignInButton({
       }}
       {...props}
     >
-      {children ?? t("header.signInWithGitHub")}
+      {children ?? t("header.signIn")}
     </Button>
   );
 }

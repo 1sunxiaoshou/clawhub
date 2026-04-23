@@ -148,7 +148,7 @@ function Dashboard() {
         <Card>
           <CardContent className="flex flex-col items-start gap-3">
             <span>{t("dashboard.signInPrompt")}</span>
-            <SignInButton variant="outline">{t("dashboard.signInWithGitHub")}</SignInButton>
+            <SignInButton variant="outline">{t("header.signIn")}</SignInButton>
           </CardContent>
         </Card>
       </Container>

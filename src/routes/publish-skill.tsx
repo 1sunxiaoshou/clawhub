@@ -356,7 +356,7 @@ export function Upload() {
             title={t("publish.signInPrompt", { type: contentLabel })}
             description={t("publish.signInDesc")}
           >
-            <SignInButton variant="outline">{t("header.signInWithGitHub")}</SignInButton>
+            <SignInButton variant="outline">{t("header.signIn")}</SignInButton>
           </EmptyState>
         </Container>
       </main>

@@ -1,8 +1,9 @@
 import { v } from "convex/values";
+import { getAuthUserId, modifyAccountCredentials, retrieveAccount } from "@convex-dev/auth/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx } from "./_generated/server";
-import { internalAction, internalMutation, internalQuery, mutation, query } from "./functions";
+import { action, internalAction, internalMutation, internalQuery, mutation, query } from "./functions";
 import {
   assertAdmin,
   assertModerator,
@@ -189,6 +190,39 @@ export const me = query({
   },
 });
 
+export const getLoginMethods = query({
+  args: {},
+  handler: async (ctx) => {
+    const { userId, user } = await requireUser(ctx);
+    const [password, github, wecom] = await Promise.all([
+      ctx.db
+        .query("authAccounts")
+        .withIndex("userIdAndProvider", (q) => q.eq("userId", userId).eq("provider", "password"))
+        .unique(),
+      ctx.db
+        .query("authAccounts")
+        .withIndex("userIdAndProvider", (q) => q.eq("userId", userId).eq("provider", "github"))
+        .unique(),
+      ctx.db
+        .query("authAccounts")
+        .withIndex("userIdAndProvider", (q) => q.eq("userId", userId).eq("provider", "wecom"))
+        .unique(),
+    ]);
+    const linkedCount = [password, github, wecom].filter(Boolean).length;
+
+    return {
+      primaryLoginMethod: user.primaryLoginMethod ?? null,
+      lastLoginAt: user.lastLoginAt ?? null,
+      lastLoginMethod: user.lastLoginMethod ?? null,
+      methods: [
+        { provider: "password" as const, linked: password !== null, canUnlink: linkedCount > 1 },
+        { provider: "github" as const, linked: github !== null, canUnlink: linkedCount > 1 },
+        { provider: "wecom" as const, linked: wecom !== null, canUnlink: linkedCount > 1 },
+      ],
+    };
+  },
+});
+
 export const ensure = mutation({
   args: {},
   handler: ensureHandler,
@@ -199,9 +233,8 @@ function normalizeHandle(handle: string | undefined) {
   return normalized ? normalized : undefined;
 }
 
-function deriveHandle(args: { existingHandle?: string; githubLogin?: string; email?: string }) {
-  // Prefer the GitHub login; only fall back to email-derived handle when we don't already have one.
-  if (args.githubLogin) return args.githubLogin;
+function deriveHandle(args: { existingHandle?: string; preferredHandle?: string; email?: string }) {
+  if (args.preferredHandle) return args.preferredHandle;
   if (!args.existingHandle && args.email) return args.email.split("@")[0]?.trim() || undefined;
   return undefined;
 }
@@ -247,10 +280,10 @@ async function computeEnsureUpdates(ctx: MutationCtx, user: Doc<"users">) {
   const existingHandleClaimable = existingHandle
     ? await canUserClaimHandle(ctx, existingHandle, user._id)
     : false;
-  const githubLogin = normalizeHandle(user.name);
+  const preferredHandle = normalizeHandle(user.name);
   const requestedHandle = deriveHandle({
     existingHandle,
-    githubLogin,
+    preferredHandle,
     email: user.email,
   });
   let derivedHandle =
@@ -266,7 +299,7 @@ async function computeEnsureUpdates(ctx: MutationCtx, user: Doc<"users">) {
     derivedHandle =
       (await resolveAvailableHandle(
         ctx,
-        requestedHandle ?? existingHandle ?? githubLogin ?? emailFallback,
+        requestedHandle ?? existingHandle ?? preferredHandle ?? emailFallback,
         user._id,
       )) ?? emailFallbackHandle;
   }
@@ -307,6 +340,26 @@ export async function ensureHandler(ctx: MutationCtx) {
   await ensurePersonalPublisherForUser(ctx, ensuredUser);
   return await ctx.db.get(userId);
 }
+
+export const recordLoginMetadataInternal = internalMutation({
+  args: {
+    userId: v.id("users"),
+    method: v.union(v.literal("password"), v.literal("github"), v.literal("wecom")),
+    passwordEnabled: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return;
+    const now = Date.now();
+    await ctx.db.patch(args.userId, {
+      lastLoginAt: now,
+      lastLoginMethod: args.method,
+      primaryLoginMethod: user.primaryLoginMethod ?? args.method,
+      passwordEnabled: args.passwordEnabled ?? user.passwordEnabled,
+      updatedAt: now,
+    });
+  },
+});
 
 export const updateProfile = mutation({
   args: {
@@ -359,10 +412,85 @@ export const deleteAccount = mutation({
       phoneVerificationTime: undefined,
       isAnonymous: undefined,
       bio: undefined,
+      primaryLoginMethod: undefined,
+      lastLoginAt: undefined,
+      lastLoginMethod: undefined,
+      passwordEnabled: undefined,
       githubCreatedAt: undefined,
       updatedAt: now,
     });
     await ctx.runMutation(internal.telemetry.clearUserTelemetryInternal, { userId });
+  },
+});
+
+export const unlinkLoginMethod = mutation({
+  args: {
+    provider: v.union(v.literal("password"), v.literal("github"), v.literal("wecom")),
+  },
+  handler: async (ctx, args) => {
+    const { userId } = await requireUser(ctx);
+    const [password, github, wecom] = await Promise.all([
+      ctx.db
+        .query("authAccounts")
+        .withIndex("userIdAndProvider", (q) => q.eq("userId", userId).eq("provider", "password"))
+        .unique(),
+      ctx.db
+        .query("authAccounts")
+        .withIndex("userIdAndProvider", (q) => q.eq("userId", userId).eq("provider", "github"))
+        .unique(),
+      ctx.db
+        .query("authAccounts")
+        .withIndex("userIdAndProvider", (q) => q.eq("userId", userId).eq("provider", "wecom"))
+        .unique(),
+    ]);
+    if ([password, github, wecom].filter(Boolean).length <= 1) {
+      throw new Error("You must keep at least one login method.");
+    }
+
+    const account = await ctx.db
+      .query("authAccounts")
+      .withIndex("userIdAndProvider", (q) => q.eq("userId", userId).eq("provider", args.provider))
+      .unique();
+    if (!account) {
+      throw new Error("Login method is not linked.");
+    }
+
+    await ctx.db.delete(account._id);
+    if (args.provider === "password") {
+      await ctx.db.patch(userId, {
+        passwordEnabled: false,
+        updatedAt: Date.now(),
+      });
+    }
+  },
+});
+
+export const changePassword = action({
+  args: {
+    currentPassword: v.string(),
+    newPassword: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = (await getAuthUserId(ctx)) as Id<"users"> | null;
+    if (!userId) throw new Error("Unauthorized");
+    const user = await ctx.runQuery(internal.users.getByIdInternal, { userId });
+    const email = user?.email?.trim().toLowerCase();
+    if (!email) {
+      throw new Error("No email is available for this account.");
+    }
+    await retrieveAccount(ctx, {
+      provider: "password",
+      account: { id: email, secret: args.currentPassword },
+    });
+    await modifyAccountCredentials(ctx, {
+      provider: "password",
+      account: { id: email, secret: args.newPassword },
+    });
+    await ctx.runMutation(internal.users.recordLoginMetadataInternal, {
+      userId,
+      method: "password",
+      passwordEnabled: true,
+    });
   },
 });
 

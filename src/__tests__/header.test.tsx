@@ -93,10 +93,10 @@ describe("Header", () => {
     expect(screen.queryByText("Packages")).toBeNull();
   });
 
-  it("renders icon-only github sign-in control when signed out", () => {
+  it("renders icon-only sign-in control when signed out", () => {
     render(<Header />);
 
-    expect(screen.getByRole("button", { name: /github/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /sign in/i })).toBeTruthy();
     expect(screen.queryByText("使用 GitHub 登录")).toBeNull();
   });
 });

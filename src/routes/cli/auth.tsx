@@ -141,7 +141,7 @@ function CliAuth() {
                 variant="primary"
                 disabled={isLoading}
               >
-                {t("header.signInWithGitHub")}
+                {t("header.signIn")}
               </SignInButton>
             </CardContent>
           </Card>

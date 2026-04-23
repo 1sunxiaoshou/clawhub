@@ -8,6 +8,7 @@ import { nitro } from "nitro/vite";
 import { defineConfig, type Plugin } from "vite";
 
 const require = createRequire(import.meta.url);
+const enableTanStackDevtools = process.env.TANSTACK_DEVTOOLS === "true";
 
 const convexEntry = require.resolve("convex");
 const convexRoot = dirname(dirname(dirname(convexEntry)));
@@ -168,11 +169,25 @@ const config = defineConfig({
     },
   },
   optimizeDeps: {
-    include: ["convex/react", "convex/browser"],
+    include: ["convex/react", "convex/browser", "is-network-error"],
+  },
+  server: {
+    watch: {
+      ignored: [
+        "**/.git/**",
+        "**/.output/**",
+        "**/.tanstack/**",
+        "**/.tmp-imageenv/**",
+        "**/.vercel/**",
+        "**/coverage/**",
+        "**/playwright-report/**",
+        "**/test-results/**",
+      ],
+    },
   },
   plugins: [
     patchArkSafariInOperator(),
-    devtools(),
+    ...(enableTanStackDevtools ? [devtools()] : []),
     nitro({
       serverDir: "server",
       rollupConfig: {

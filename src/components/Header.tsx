@@ -2,6 +2,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { CircleUserRound, Languages, Menu, Moon, Plus, Sun } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
+import { isAuthPath } from "../auth/isAuthPath";
 import { gravatarUrl } from "../lib/gravatar";
 import { useI18n } from "../lib/i18n";
 import { isModerator } from "../lib/roles";
@@ -33,6 +34,7 @@ export default function Header() {
   const siteName = useMemo(() => getSiteName(siteMode), [siteMode]);
   const isSoulMode = siteMode === "souls";
   const isHomePage = location.pathname === "/";
+  const isAuthPage = isAuthPath(location.pathname);
   const clawHubUrl = getClawHubSiteUrl();
 
   const avatar = me?.image ?? (me?.email ? gravatarUrl(me.email) : undefined);
@@ -139,7 +141,7 @@ export default function Header() {
   return (
     <header
       className={`site-header top-0 z-50 w-full border-b border-border/10 transition-colors ${
-        isHomePage ? "home-header absolute left-0 right-0" : "sticky"
+        isHomePage ? "home-header absolute left-0 right-0" : isAuthPage ? "absolute left-0 right-0 border-transparent bg-transparent" : "sticky"
       }`}
     >
       <div className="site-header-inner mx-auto grid h-[4.5rem] max-w-[1280px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 px-5">
@@ -157,7 +159,9 @@ export default function Header() {
           />
         </Link>
 
-        <nav className="header-nav hidden items-center justify-center gap-1 md:flex">{navLinks}</nav>
+        <nav className="header-nav hidden items-center justify-center gap-1 md:flex">
+          {isAuthPage ? null : navLinks}
+        </nav>
 
         <div className="header-actions flex items-center justify-self-end gap-2">
           {isAuthenticated && me ? (
@@ -334,7 +338,7 @@ export default function Header() {
                     <SignInButton
                       variant="outline"
                       className="w-full justify-center rounded-full"
-                      aria-label={t("header.signInWithGitHub")}
+                      aria-label={t("header.signIn")}
                     >
                       {t("header.signIn")}
                     </SignInButton>
@@ -413,7 +417,7 @@ export default function Header() {
                 variant="ghost"
                 size="icon"
                 disabled={isLoading}
-                aria-label={t("header.signInWithGitHub")}
+                aria-label={t("header.signIn")}
                 className="header-icon-button header-utility-button header-minimal-icon h-10 w-10 rounded-full"
               >
                 <CircleUserRound className="h-5 w-5" aria-hidden="true" />
