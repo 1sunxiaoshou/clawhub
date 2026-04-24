@@ -29,3 +29,6 @@ my_doc/
 # Local deployment artifacts
 deploy_frontend.ps1
 output.tar.gz
+
+# Temporary files
+*tmp*
