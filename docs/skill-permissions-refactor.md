@@ -440,11 +440,12 @@ bunx tsc -p packages/clawhub/tsconfig.json --noEmit
 进展（2026-04-24）：
 
 - `bun run lint` 通过。
-- `bun run test` 通过：129 files / 992 tests。
+- `bun run test` 通过：129 files / 994 tests。
 - `bun run coverage` 通过：全局 statements 88.28%、functions 90.84%、branches 76.81%、lines 91.77%，满足全局 80% 覆盖要求。
 - `bunx tsc --noEmit` 通过。
 - `bunx tsc -p packages/schema/tsconfig.json --noEmit` 通过。
 - `bunx tsc -p packages/clawhub/tsconfig.json --noEmit` 通过。
+- HTTP v1 已补齐 CLI token 外部应用读取入口：`GET /api/v1/me` 返回用户和 publisher membership，`GET /api/v1/skills?scope=accessible` 返回 token 用户可读的 owner、publisher membership、user grant、publisher grant skills；详情、版本、scan、raw file、download 继续复用 readable-skill fallback。
 
 ## 预期最终状态
 

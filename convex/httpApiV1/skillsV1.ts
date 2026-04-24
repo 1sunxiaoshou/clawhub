@@ -60,6 +60,8 @@ type ListSkillsResult = {
   nextCursor: string | null;
 };
 
+type AccessibleSkillResult = Doc<"skills">[];
+
 type PublicSkillVersionFile = {
   path: string;
   size: number;
@@ -522,10 +524,73 @@ export async function listSkillsV1Handler(ctx: ActionCtx, request: Request) {
   const limit = toOptionalNumber(url.searchParams.get("limit"));
   const cursor = url.searchParams.get("cursor")?.trim() || undefined;
   const sort = parseListSort(url.searchParams.get("sort"));
+  const scope = url.searchParams.get("scope")?.trim().toLowerCase();
   const nonSuspiciousOnly = resolveBooleanQueryParam(
     url.searchParams.get("nonSuspiciousOnly"),
     url.searchParams.get("nonSuspicious"),
   );
+
+  if (scope === "accessible" || scope === "mine") {
+    let userId: Id<"users">;
+    try {
+      userId = (await requireApiTokenUser(ctx, request)).userId;
+    } catch {
+      return text("Unauthorized", 401, rate.headers);
+    }
+
+    const skills = (await ctx.runQuery(internal.skills.listAccessibleForUserInternal, {
+      userId,
+      limit,
+    })) as AccessibleSkillResult;
+    const resolvedTagsList = await resolveTagsBatch(
+      ctx,
+      skills.map((skill) => skill.tags),
+    );
+    const latestVersions = await Promise.all(
+      skills.map((skill) =>
+        skill.latestVersionId
+          ? ctx.runQuery(internal.skills.getVersionByIdInternal, {
+              versionId: skill.latestVersionId,
+            })
+          : null,
+      ),
+    );
+    const items = skills.map((skill, idx) => {
+      const latestVersion = toApiSkillVersion(latestVersions[idx] as Doc<"skillVersions"> | null);
+      return {
+        slug: skill.slug,
+        displayName: skill.displayName,
+        summary: skill.summary ?? null,
+        visibility: skill.visibility ?? "public",
+        ownerUserId: skill.ownerUserId,
+        ownerPublisherId: skill.ownerPublisherId ?? null,
+        tags: resolvedTagsList[idx],
+        stats: skill.stats,
+        createdAt: skill.createdAt,
+        updatedAt: skill.updatedAt,
+        latestVersion: latestVersion
+          ? {
+              version: latestVersion.version,
+              createdAt: latestVersion.createdAt,
+              changelog: latestVersion.changelog,
+              license: latestVersion.parsed?.license ?? null,
+            }
+          : null,
+        metadata: latestVersion?.parsed?.clawdis
+          ? {
+              os: latestVersion.parsed.clawdis.os ?? null,
+              systems: latestVersion.parsed.clawdis.nix?.systems ?? null,
+            }
+          : null,
+        moderation: {
+          status: skill.moderationStatus ?? "active",
+          reason: skill.moderationReason ?? null,
+          isSuspicious: Boolean(skill.isSuspicious),
+        },
+      };
+    });
+    return json({ items, nextCursor: null }, 200, rate.headers);
+  }
 
   const result = (await ctx.runQuery(api.skills.listPublicPageV4, {
     numItems: limit,

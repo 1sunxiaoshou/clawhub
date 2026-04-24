@@ -386,7 +386,9 @@ const skillAccessGrants = defineTable({
 })
   .index("by_skill", ["skillId"])
   .index("by_skill_user", ["skillId", "subjectUserId"])
-  .index("by_skill_publisher", ["skillId", "subjectPublisherId"]);
+  .index("by_skill_publisher", ["skillId", "subjectPublisherId"])
+  .index("by_subject_user", ["subjectUserId"])
+  .index("by_subject_publisher", ["subjectPublisherId"]);
 
 const souls = defineTable({
   slug: v.string(),

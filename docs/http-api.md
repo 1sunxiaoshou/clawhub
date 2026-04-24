@@ -105,6 +105,7 @@ Query params:
 - `limit` (optional): integer (1–200)
 - `cursor` (optional): pagination cursor
 - `sort` (optional): `updated` (default), `newest`, `downloads`, `stars` (alias: `rating`), `installs`, `name`
+- `scope` (optional): `accessible` or `mine` to list skills readable by the Bearer token user
 - `nonSuspiciousOnly` (optional): `true` to hide suspicious (`flagged.suspicious`) skills
 - `nonSuspicious` (optional): legacy alias for `nonSuspiciousOnly`
 
@@ -112,6 +113,9 @@ Notes:
 
 - Legacy sort aliases `installsCurrent`, `installsAllTime`, and `trending` are accepted and map to `installs`.
 - Use `nextCursor` to continue pagination when present. A short page does not by itself mean end-of-results.
+- `scope=accessible` and `scope=mine` require `Authorization: Bearer clh_...`. The token may be a CLI token.
+- Accessible scoped results include skills the token user can read through direct ownership, publisher membership, direct user grants, or publisher grants. This is intended for external apps that need the same private/restricted visibility as the CLI.
+- Scoped results are returned newest-updated first and currently return `nextCursor: null`.
 
 Response:
 
@@ -412,9 +416,39 @@ All endpoints require:
 Authorization: Bearer clh_...
 ```
 
+CLI tokens use the same Bearer token authentication on HTTP endpoints. Other apps can pass a CLI token directly in the `Authorization` header to identify the user and access skill read APIs permitted for that user.
+
+### `GET /api/v1/me`
+
+Validates token and returns the user plus publisher memberships visible to the token user.
+
+Response:
+
+```json
+{
+  "user": {
+    "id": "users:...",
+    "handle": "peter",
+    "role": "user",
+    "displayName": "Peter",
+    "image": null
+  },
+  "publishers": [
+    {
+      "id": "publishers:...",
+      "handle": "team",
+      "displayName": "Team",
+      "image": null,
+      "kind": "org",
+      "role": "owner"
+    }
+  ]
+}
+```
+
 ### `GET /api/v1/whoami`
 
-Validates token and returns the user handle.
+Legacy alias for `GET /api/v1/me`.
 
 ### `POST /api/v1/skills`
 

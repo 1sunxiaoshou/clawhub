@@ -61,6 +61,7 @@ export const starsPostRouterV1Http = httpAction(starsPostRouterV1Handler);
 export const starsDeleteRouterV1Http = httpAction(starsDeleteRouterV1Handler);
 export const transfersGetRouterV1Http = httpAction(transfersGetRouterV1Handler);
 
+export const meV1Http = httpAction(whoamiV1Handler);
 export const whoamiV1Http = httpAction(whoamiV1Handler);
 export const usersPostRouterV1Http = httpAction(usersPostRouterV1Handler);
 export const usersListV1Http = httpAction(usersListV1Handler);

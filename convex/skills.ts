@@ -2118,6 +2118,72 @@ export const listRecentVersions = query({
   },
 });
 
+export const listAccessibleForUserInternal = internalQuery({
+  args: {
+    userId: v.id("users"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user || user.deletedAt || user.deactivatedAt) return [];
+
+    const limit = clampInt(args.limit ?? 100, 1, MAX_LIST_BULK_LIMIT);
+    const takeLimit = Math.min(limit * 3, MAX_LIST_TAKE);
+    const byId = new Map<Id<"skills">, Doc<"skills">>();
+
+    const addIfReadable = async (skill: Doc<"skills"> | null) => {
+      if (!skill) return;
+      if (byId.has(skill._id)) return;
+      if (!(await canReadSkill(ctx, skill, user))) return;
+      byId.set(skill._id, skill);
+    };
+
+    const ownedSkills = await ctx.db
+      .query("skills")
+      .withIndex("by_owner", (q) => q.eq("ownerUserId", args.userId))
+      .order("desc")
+      .take(takeLimit);
+    for (const skill of ownedSkills) {
+      await addIfReadable(skill);
+    }
+
+    const memberships = await ctx.db
+      .query("publisherMembers")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const membership of memberships) {
+      const publisherSkills = await ctx.db
+        .query("skills")
+        .withIndex("by_owner_publisher", (q) => q.eq("ownerPublisherId", membership.publisherId))
+        .order("desc")
+        .take(takeLimit);
+      for (const skill of publisherSkills) {
+        await addIfReadable(skill);
+      }
+
+      const publisherGrants = await ctx.db
+        .query("skillAccessGrants")
+        .withIndex("by_subject_publisher", (q) =>
+          q.eq("subjectPublisherId", membership.publisherId),
+        )
+        .take(takeLimit);
+      for (const grant of publisherGrants) {
+        await addIfReadable(await ctx.db.get(grant.skillId));
+      }
+    }
+
+    const userGrants = await ctx.db
+      .query("skillAccessGrants")
+      .withIndex("by_subject_user", (q) => q.eq("subjectUserId", args.userId))
+      .take(takeLimit);
+    for (const grant of userGrants) {
+      await addIfReadable(await ctx.db.get(grant.skillId));
+    }
+
+    return [...byId.values()].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit);
+  },
+});
+
 export const listReportedSkills = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, args) => {

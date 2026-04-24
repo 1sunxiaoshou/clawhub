@@ -447,6 +447,50 @@ export const listMine = query({
   },
 });
 
+export const listForUserInternal = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user || user.deletedAt || user.deactivatedAt) return [];
+    const memberships = await ctx.db
+      .query("publisherMembers")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    const publishers = await Promise.all(
+      memberships.map(async (membership) => {
+        const publisher = await ctx.db.get(membership.publisherId);
+        const publicPublisher = toPublicPublisher(publisher);
+        if (!publicPublisher) return null;
+        return {
+          publisher: publicPublisher,
+          role: membership.role,
+        };
+      }),
+    );
+    const visiblePublishers = publishers.filter(
+      (
+        item,
+      ): item is {
+        publisher: NonNullable<ReturnType<typeof toPublicPublisher>>;
+        role: Doc<"publisherMembers">["role"];
+      } => Boolean(item),
+    );
+    const personalPublisher = toPublicPublisher(
+      await getPersonalPublisherForUserOrFallback(ctx, user),
+    );
+    if (
+      personalPublisher &&
+      !visiblePublishers.some((entry) => entry.publisher._id === personalPublisher._id)
+    ) {
+      visiblePublishers.unshift({
+        publisher: personalPublisher,
+        role: "owner",
+      });
+    }
+    return visiblePublishers;
+  },
+});
+
 export const getByHandle = query({
   args: { handle: v.string() },
   handler: async (ctx, args) => toPublicPublisher(await getPublisherByHandle(ctx, args.handle)),

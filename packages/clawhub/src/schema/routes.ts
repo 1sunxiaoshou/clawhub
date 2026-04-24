@@ -24,5 +24,6 @@ export const ApiRoutes = {
   transfers: "/api/v1/transfers",
   souls: "/api/v1/souls",
   users: "/api/v1/users",
+  me: "/api/v1/me",
   whoami: "/api/v1/whoami",
 } as const;
