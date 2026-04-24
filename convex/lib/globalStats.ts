@@ -1,6 +1,6 @@
 import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import { isModerationPubliclyReadable, isPublicVisibility } from "./skillAccess";
+import { canListSkillPublicly } from "./skillPolicy";
 
 export const GLOBAL_STATS_KEY = "default";
 
@@ -13,9 +13,7 @@ type GlobalStatsReadCtx = Pick<MutationCtx | QueryCtx, "db">;
 type GlobalStatsWriteCtx = Pick<MutationCtx, "db">;
 
 export function isPublicSkillDoc(skill: SkillVisibilityFields | null | undefined) {
-  if (!skill) return false;
-  if (!isPublicVisibility(skill)) return false;
-  return isModerationPubliclyReadable(skill);
+  return canListSkillPublicly(skill);
 }
 
 export function getPublicSkillVisibilityDelta(

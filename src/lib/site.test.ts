@@ -119,10 +119,10 @@ describe("site helpers", () => {
   });
 
   it("derives site metadata from mode", () => {
-    expect(getSiteName("skills")).toBe("ClawHub");
+    expect(getSiteName("skills")).toBe("Deep Skill Hub");
     expect(getSiteName("souls")).toBe("SoulHub");
 
-    expect(getSiteDescription("skills")).toContain("ClawHub");
+    expect(getSiteDescription("skills")).toContain("Deep Skill Hub");
     expect(getSiteDescription("souls")).toContain("SoulHub");
 
     expect(getSiteUrlForMode("skills")).toBe("https://clawhub.ai");

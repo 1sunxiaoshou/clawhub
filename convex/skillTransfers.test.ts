@@ -336,6 +336,28 @@ describe("skillTransfers", () => {
       "skillOwnershipTransfers:1",
       expect.objectContaining({ status: "accepted" }),
     );
+    expect(insert).toHaveBeenCalledWith(
+      "auditLogs",
+      expect.objectContaining({
+        action: "skill.transfer.accept",
+        targetType: "skill",
+        targetId: "skills:1",
+      }),
+    );
+    expect(insert).toHaveBeenCalledWith(
+      "auditLogs",
+      expect.objectContaining({
+        action: "skill.owner.change",
+        targetType: "skill",
+        targetId: "skills:1",
+        metadata: expect.objectContaining({
+          from: "users:1",
+          to: "users:2",
+          transferId: "skillOwnershipTransfers:1",
+          ownerPublisherId: "publishers:alice",
+        }),
+      }),
+    );
   });
 
   it("acceptTransferInternal cancels stale transfer when ownership changed", async () => {

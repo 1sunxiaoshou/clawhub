@@ -1,5 +1,5 @@
 import type { Doc } from "../_generated/dataModel";
-import { isPublicSkillDoc } from "./globalStats";
+import { canListSkillPublicly } from "./skillPolicy";
 
 export type PublicUser = Pick<
   Doc<"users">,
@@ -115,7 +115,7 @@ export function toPublicPublisher(
 
 export function toPublicSkill(skill: HydratableSkill | null | undefined): PublicSkill | null {
   if (!skill) return null;
-  if (!isPublicSkillDoc(skill)) return null;
+  if (!canListSkillPublicly(skill)) return null;
   const stats = {
     downloads:
       typeof skill.statsDownloads === "number"

@@ -1,10 +1,11 @@
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { httpAction, internalMutation } from "./functions";
 import { getOptionalApiTokenUserId } from "./lib/apiTokenAuth";
 import { corsHeaders, mergeHeaders } from "./lib/httpHeaders";
 import { applyRateLimit, getClientIp } from "./lib/httpRateLimit";
+import { allowSkillPolicyDecision, canDownloadSkill } from "./lib/skillPolicy";
 import { buildDeterministicZip } from "./lib/skillZip";
 import { hashToken } from "./lib/tokens";
 import { insertStatEvent } from "./skillStatEvents";
@@ -21,6 +22,11 @@ type DownloadSkill = {
   latestVersionId?: Id<"skillVersions">;
   tags: Record<string, Id<"skillVersions">>;
 };
+
+type DownloadPolicySkill = Pick<
+  Doc<"skills">,
+  "moderationStatus" | "moderationReason" | "moderationFlags"
+>;
 
 export async function downloadZipHandler(
   ctx: Parameters<Parameters<typeof httpAction>[0]>[0],
@@ -43,12 +49,9 @@ export async function downloadZipHandler(
 
   const skillResult = await ctx.runQuery(api.skills.getBySlug, { slug });
   let skill: DownloadSkill | null | undefined = skillResult?.skill;
-  let moderationInfo: {
-    isMalwareBlocked?: boolean;
-    isPendingScan?: boolean;
-    isRemoved?: boolean;
-    isHiddenByMod?: boolean;
-  } | null | undefined = skillResult?.moderationInfo;
+  let policySkill: DownloadPolicySkill | null = skill
+    ? await ctx.runQuery(internal.skills.getSkillBySlugInternal, { slug })
+    : null;
   if (!skill) {
     const userId = await getOptionalApiTokenUserId(ctx, request);
     const internalSkill = userId
@@ -64,16 +67,7 @@ export async function downloadZipHandler(
     if (canRead) {
       const readableSkill = internalSkill!;
       skill = readableSkill;
-      moderationInfo = {
-        isMalwareBlocked: Boolean(readableSkill.moderationFlags?.includes("blocked.malware")),
-        isPendingScan:
-          readableSkill.moderationStatus === "hidden" &&
-          readableSkill.moderationReason === "pending.scan",
-        isRemoved: readableSkill.moderationStatus === "removed",
-        isHiddenByMod:
-          readableSkill.moderationStatus === "hidden" &&
-          readableSkill.moderationReason !== "pending.scan",
-      };
+      policySkill = readableSkill;
     }
   }
   if (!skill) {
@@ -83,35 +77,10 @@ export async function downloadZipHandler(
     });
   }
 
-  // Block downloads based on moderation status.
-  const mod = moderationInfo;
-  if (mod?.isMalwareBlocked) {
-    return new Response(
-      "Blocked: this skill has been flagged as malicious by VirusTotal and cannot be downloaded.",
-      {
-        status: 403,
-        headers: mergeHeaders(rate.headers, corsHeaders()),
-      },
-    );
-  }
-  if (mod?.isPendingScan) {
-    return new Response(
-      "This skill is pending a security scan by VirusTotal. Please try again in a few minutes.",
-      {
-        status: 423,
-        headers: mergeHeaders(rate.headers, corsHeaders()),
-      },
-    );
-  }
-  if (mod?.isRemoved) {
-    return new Response("This skill has been removed by a moderator.", {
-      status: 410,
-      headers: mergeHeaders(rate.headers, corsHeaders()),
-    });
-  }
-  if (mod?.isHiddenByMod) {
-    return new Response("This skill is currently unavailable.", {
-      status: 403,
+  const downloadDecision = policySkill ? canDownloadSkill(policySkill) : allowSkillPolicyDecision();
+  if (!downloadDecision.allowed) {
+    return new Response(downloadDecision.message, {
+      status: downloadDecision.status,
       headers: mergeHeaders(rate.headers, corsHeaders()),
     });
   }

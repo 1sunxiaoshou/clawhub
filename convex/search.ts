@@ -7,9 +7,10 @@ import { isSkillHighlighted } from "./lib/badges";
 import { generateEmbedding } from "./lib/embeddings";
 import type { HydratableSkill, PublicPublisher } from "./lib/public";
 import { toPublicPublisher, toPublicSkill, toPublicSoul } from "./lib/public";
-import { SKILL_CAPABILITY_TAGS } from "./lib/skillCapabilityTags";
 import { getOwnerPublisher } from "./lib/publishers";
 import { matchesExactTokens, tokenize } from "./lib/searchText";
+import { SKILL_CAPABILITY_TAGS } from "./lib/skillCapabilityTags";
+import { canListSkillPublicly } from "./lib/skillPolicy";
 import { isSkillSuspicious } from "./lib/skillSafety";
 import { digestToHydratableSkill, digestToOwnerInfo } from "./lib/skillSearchDigest";
 
@@ -270,7 +271,7 @@ export const getExactSkillSlugMatch = internalQuery({
       .query("skills")
       .withIndex("by_slug", (q) => q.eq("slug", args.slug))
       .unique();
-    if (!skill || skill.softDeletedAt) return null;
+    if (!skill || !canListSkillPublicly(skill)) return null;
     if (args.nonSuspiciousOnly && isSkillSuspicious(skill)) return null;
 
     const getOwnerInfo = makeOwnerInfoGetter(ctx);
@@ -316,7 +317,7 @@ export const hydrateResults = internalQuery({
         const skill: HydratableSkill | null = digest
           ? digestToHydratableSkill(digest)
           : await ctx.db.get(skillId);
-        if (!skill || skill.softDeletedAt) return null;
+        if (!skill || !canListSkillPublicly(skill)) return null;
         if (args.nonSuspiciousOnly && isSkillSuspicious(skill)) return null;
         // Use pre-resolved owner from digest to avoid reading the users table.
         // Fall back to live lookup when digest owner is null (deactivated/deleted user).
@@ -370,7 +371,7 @@ export const lexicalFallbackSkills = internalQuery({
         .unique();
       if (
         exactSlugSkill &&
-        !exactSlugSkill.softDeletedAt &&
+        canListSkillPublicly(exactSlugSkill) &&
         (!args.nonSuspiciousOnly || !isSkillSuspicious(exactSlugSkill)) &&
         matchesCapabilityTag(exactSlugSkill, args.capabilityTag)
       ) {
@@ -388,6 +389,7 @@ export const lexicalFallbackSkills = internalQuery({
 
     for (const digest of recentDigests) {
       if (seenSkillIds.has(digest.skillId)) continue;
+      if (!canListSkillPublicly(digest)) continue;
       const skill = digestToHydratableSkill(digest);
       if (args.nonSuspiciousOnly && isSkillSuspicious(skill)) continue;
       if (!matchesCapabilityTag(skill, args.capabilityTag)) continue;

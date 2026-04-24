@@ -51,6 +51,26 @@ function makeActionCtx(args: {
 }) {
   return {
     runQuery: vi.fn(async (_endpoint: unknown, payload: Record<string, unknown>) => {
+      if (payload.versionId && Object.hasOwn(payload, "userId")) {
+        const version = args.version;
+        const skill = args.skill;
+        const userId = payload.userId;
+        if (!version || !skill) return false;
+        if (version.softDeletedAt) return false;
+        if (
+          Array.isArray(skill.moderationFlags) &&
+          skill.moderationFlags.includes("blocked.malware")
+        ) {
+          return true;
+        }
+        if (args.actor?.role === "admin" || args.actor?.role === "moderator") return true;
+        if (userId && userId === skill.ownerUserId) return true;
+        if (userId && args.publisherMemberRole) return true;
+        if (skill.softDeletedAt) return false;
+        if (skill.moderationStatus && skill.moderationStatus !== "active") return false;
+        if (skill.visibility === "private" || skill.visibility === "restricted") return false;
+        return true;
+      }
       if (payload.versionId && args.version) return args.version ?? null;
       if (payload.skillId && Object.hasOwn(payload, "userId")) {
         const skill = args.skill;

@@ -120,6 +120,29 @@ describe("skills reclaim ownership transfer", () => {
         releasedAt: expect.any(Number),
       }),
     );
+    expect(insert).toHaveBeenCalledWith(
+      "auditLogs",
+      expect.objectContaining({
+        action: "slug.reclaim",
+        targetType: "slug",
+        targetId: "capability-evolver",
+      }),
+    );
+    expect(insert).toHaveBeenCalledWith(
+      "auditLogs",
+      expect.objectContaining({
+        action: "skill.owner.change",
+        targetType: "skill",
+        targetId: "skills:1",
+        metadata: expect.objectContaining({
+          from: "users:old",
+          to: "users:new",
+          slug: "capability-evolver",
+          source: "slug.reclaim",
+          transferRootSlugOnly: true,
+        }),
+      }),
+    );
   });
 
   it("returns missing without reserving when transferRootSlugOnly is true and slug does not exist", async () => {
