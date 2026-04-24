@@ -8,7 +8,6 @@
   "scripts": {
     "build": "bun --bun vite build && bun scripts/copy-og-assets.ts",
     "auth:keys": "bun scripts/generate-convex-auth-keys.ts",
-    "auth:keys:apply": "bun scripts/apply-convex-auth-keys.ts",
     "check:peers": "bun scripts/check-peer-deps.ts",
     "check:secrets": "bun scripts/check-staged-secrets.mjs",
     "convex:deploy": "bunx convex deploy --typecheck=disable --yes",
