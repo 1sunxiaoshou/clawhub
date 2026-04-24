@@ -20,7 +20,9 @@ vi.mock("@tanstack/react-router", async () => {
   const actual = await vi.importActual<object>("@tanstack/react-router");
   return {
     ...actual,
+    Outlet: () => null,
     useNavigate: () => vi.fn(),
+    useRouterState: () => "/settings",
   };
 });
 
@@ -35,12 +37,12 @@ describe("Settings", () => {
     });
   });
 
-  it("skips token loading until auth has resolved", () => {
+  it("shows a loading state until auth has resolved", () => {
     useQueryMock.mockImplementation(() => undefined);
 
     render(<Settings />);
 
-    expect(screen.getByText(/sign in to access settings\./i)).toBeTruthy();
+    expect(screen.queryByText(/sign in to access settings\./i)).toBeNull();
     expect(useQueryMock.mock.calls.some(([, args]) => args === "skip")).toBe(true);
   });
 });

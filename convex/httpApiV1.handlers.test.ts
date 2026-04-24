@@ -113,6 +113,58 @@ describe("httpApiV1 handlers", () => {
     expect(runAction).not.toHaveBeenCalled();
   });
 
+  it("skills detail allows api-token access to restricted skills", async () => {
+    vi.mocked(getOptionalApiTokenUserId).mockResolvedValue("users:viewer" as never);
+    let publicSlugCalls = 0;
+    const restrictedSkill = {
+      _id: "skills:restricted",
+      slug: "restricted",
+      displayName: "Restricted",
+      summary: "Private enough",
+      ownerUserId: "users:owner",
+      latestVersionId: "skillVersions:1",
+      tags: { latest: "skillVersions:1" },
+      stats: { downloads: 0, stars: 0, versions: 1, comments: 0 },
+      createdAt: 1,
+      updatedAt: 2,
+      visibility: "restricted",
+      moderationStatus: "active",
+    };
+    const version = {
+      _id: "skillVersions:1",
+      skillId: "skills:restricted",
+      version: "1.0.0",
+      createdAt: 1,
+      changelog: "init",
+      files: [],
+      parsed: { frontmatter: {}, license: "MIT-0" },
+    };
+    const ctx = makeCtx({
+      runQuery: vi.fn(async (_query: unknown, args: Record<string, unknown>) => {
+        if (hasSlugArgs(args)) {
+          publicSlugCalls += 1;
+          return publicSlugCalls === 1 ? null : restrictedSkill;
+        }
+        if (args.skillId === "skills:restricted" && args.userId === "users:viewer") return true;
+        if (args.versionId === "skillVersions:1") return version;
+        if (Array.isArray(args.versionIds)) return [version];
+        return null;
+      }),
+    });
+
+    const response = await __handlers.skillsGetRouterV1Handler(
+      ctx,
+      new Request("https://example.com/api/v1/skills/restricted", {
+        headers: { Authorization: "Bearer test" },
+      }),
+    );
+
+    if (response.status !== 200) throw new Error(await response.text());
+    const body = await response.json();
+    expect(body.skill.slug).toBe("restricted");
+    expect(body.latestVersion.version).toBe("1.0.0");
+  });
+
   it("users/restore forbids non-admin api tokens", async () => {
     const runQuery = vi.fn();
     const runAction = vi.fn();

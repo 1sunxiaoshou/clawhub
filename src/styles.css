@@ -529,10 +529,14 @@ a {
 
 .site-header {
   border-bottom: 0;
-  background: transparent;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.96) 0%, rgba(248, 251, 255, 0) 100%);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   box-shadow: none;
+}
+
+[data-theme="dark"] .site-header {
+  background: linear-gradient(180deg, rgba(3, 17, 27, 0.96) 0%, rgba(3, 17, 27, 0) 100%);
 }
 
 .site-header-inner {
@@ -645,7 +649,11 @@ a {
 }
 
 .home-header {
-  background: transparent;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.96) 0%, rgba(248, 251, 255, 0) 100%);
+}
+
+[data-theme="dark"] .home-header {
+  background: linear-gradient(180deg, rgba(3, 17, 27, 0.96) 0%, rgba(3, 17, 27, 0) 100%);
 }
 
 code {

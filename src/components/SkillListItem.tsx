@@ -20,7 +20,12 @@ export function SkillListItem({ skill, ownerHandle, owner }: SkillListItemProps)
   const badges = getSkillBadges(skill);
 
   return (
-    <Link to={href} className="skill-list-item">
+    <Link
+      to={href}
+      params={(current) => current}
+      search={(current) => current}
+      className="skill-list-item"
+    >
       <MarketplaceIcon kind="skill" label={skill.displayName} />
       <div className="skill-list-item-body">
         <div className="skill-list-item-main">

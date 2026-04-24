@@ -81,7 +81,7 @@ describe("SignInButton", () => {
     expect(signInMock).not.toHaveBeenCalled();
   });
 
-  it("does not surface an error when sign-in resolves without redirecting", async () => {
+  it("surfaces an error when sign-in resolves without redirecting", async () => {
     signInMock.mockResolvedValue({ signingIn: false });
 
     render(<SignInButton provider="github">Sign in with GitHub</SignInButton>);
@@ -93,7 +93,7 @@ describe("SignInButton", () => {
       });
     });
     expect(setAuthErrorMock).not.toHaveBeenCalled();
-    expect(toastErrorMock).not.toHaveBeenCalled();
+    expect(toastErrorMock).toHaveBeenCalledWith("Sign in failed. Please try again.");
   });
 
   it("surfaces user-facing auth errors as toast when sign-in rejects outside cli auth", async () => {

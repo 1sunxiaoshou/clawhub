@@ -4,6 +4,7 @@ const AUTH_PATHS = new Set([
   '/register',
   '/forgot-password',
   '/reset-password',
+  '/settings/password',
 ]);
 
 export function isAuthPath(pathname: string) {

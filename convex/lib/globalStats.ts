@@ -1,21 +1,21 @@
 import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import { isModerationPubliclyReadable, isPublicVisibility } from "./skillAccess";
 
 export const GLOBAL_STATS_KEY = "default";
 
 type SkillVisibilityFields = Pick<
   Doc<"skills">,
-  "softDeletedAt" | "moderationStatus" | "moderationFlags"
+  "visibility" | "softDeletedAt" | "moderationStatus" | "moderationFlags"
 >;
 
 type GlobalStatsReadCtx = Pick<MutationCtx | QueryCtx, "db">;
 type GlobalStatsWriteCtx = Pick<MutationCtx, "db">;
 
 export function isPublicSkillDoc(skill: SkillVisibilityFields | null | undefined) {
-  if (!skill || skill.softDeletedAt) return false;
-  if (skill.moderationStatus && skill.moderationStatus !== "active") return false;
-  if (skill.moderationFlags?.includes("blocked.malware")) return false;
-  return true;
+  if (!skill) return false;
+  if (!isPublicVisibility(skill)) return false;
+  return isModerationPubliclyReadable(skill);
 }
 
 export function getPublicSkillVisibilityDelta(

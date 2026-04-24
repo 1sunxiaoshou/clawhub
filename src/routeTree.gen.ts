@@ -30,6 +30,7 @@ import { Route as PluginsIndexRouteImport } from './routes/plugins/index'
 import { Route as PackagesIndexRouteImport } from './routes/packages/index'
 import { Route as UHandleRouteImport } from './routes/u/$handle'
 import { Route as SoulsSlugRouteImport } from './routes/souls/$slug'
+import { Route as SettingsPasswordRouteImport } from './routes/settings_.password'
 import { Route as SettingsSecurityRouteImport } from './routes/settings.security'
 import { Route as PluginsNewRouteImport } from './routes/plugins/new'
 import { Route as PluginsNameRouteImport } from './routes/plugins/$name'
@@ -39,6 +40,7 @@ import { Route as OrgsHandleRouteImport } from './routes/orgs/$handle'
 import { Route as LoginPasswordRouteImport } from './routes/login.password'
 import { Route as CliAuthRouteImport } from './routes/cli/auth'
 import { Route as OwnerSlugRouteImport } from './routes/$owner/$slug'
+import { Route as SettingsSecurityPasswordRouteImport } from './routes/settings.security.password'
 
 const UploadRoute = UploadRouteImport.update({
   id: '/upload',
@@ -145,6 +147,11 @@ const SoulsSlugRoute = SoulsSlugRouteImport.update({
   path: '/souls/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsPasswordRoute = SettingsPasswordRouteImport.update({
+  id: '/settings_/password',
+  path: '/settings/password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsSecurityRoute = SettingsSecurityRouteImport.update({
   id: '/security',
   path: '/security',
@@ -190,6 +197,12 @@ const OwnerSlugRoute = OwnerSlugRouteImport.update({
   path: '/$owner/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsSecurityPasswordRoute =
+  SettingsSecurityPasswordRouteImport.update({
+    id: '/password',
+    path: '/password',
+    getParentRoute: () => SettingsSecurityRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -215,13 +228,15 @@ export interface FileRoutesByFullPath {
   '/packages/new': typeof PackagesNewRoute
   '/plugins/$name': typeof PluginsNameRoute
   '/plugins/new': typeof PluginsNewRoute
-  '/settings/security': typeof SettingsSecurityRoute
+  '/settings/security': typeof SettingsSecurityRouteWithChildren
+  '/settings/password': typeof SettingsPasswordRoute
   '/souls/$slug': typeof SoulsSlugRoute
   '/u/$handle': typeof UHandleRoute
   '/packages/': typeof PackagesIndexRoute
   '/plugins/': typeof PluginsIndexRoute
   '/skills/': typeof SkillsIndexRoute
   '/souls/': typeof SoulsIndexRoute
+  '/settings/security/password': typeof SettingsSecurityPasswordRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -247,13 +262,15 @@ export interface FileRoutesByTo {
   '/packages/new': typeof PackagesNewRoute
   '/plugins/$name': typeof PluginsNameRoute
   '/plugins/new': typeof PluginsNewRoute
-  '/settings/security': typeof SettingsSecurityRoute
+  '/settings/security': typeof SettingsSecurityRouteWithChildren
+  '/settings/password': typeof SettingsPasswordRoute
   '/souls/$slug': typeof SoulsSlugRoute
   '/u/$handle': typeof UHandleRoute
   '/packages': typeof PackagesIndexRoute
   '/plugins': typeof PluginsIndexRoute
   '/skills': typeof SkillsIndexRoute
   '/souls': typeof SoulsIndexRoute
+  '/settings/security/password': typeof SettingsSecurityPasswordRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -280,13 +297,15 @@ export interface FileRoutesById {
   '/packages/new': typeof PackagesNewRoute
   '/plugins/$name': typeof PluginsNameRoute
   '/plugins/new': typeof PluginsNewRoute
-  '/settings/security': typeof SettingsSecurityRoute
+  '/settings/security': typeof SettingsSecurityRouteWithChildren
+  '/settings_/password': typeof SettingsPasswordRoute
   '/souls/$slug': typeof SoulsSlugRoute
   '/u/$handle': typeof UHandleRoute
   '/packages/': typeof PackagesIndexRoute
   '/plugins/': typeof PluginsIndexRoute
   '/skills/': typeof SkillsIndexRoute
   '/souls/': typeof SoulsIndexRoute
+  '/settings/security/password': typeof SettingsSecurityPasswordRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -315,12 +334,14 @@ export interface FileRouteTypes {
     | '/plugins/$name'
     | '/plugins/new'
     | '/settings/security'
+    | '/settings/password'
     | '/souls/$slug'
     | '/u/$handle'
     | '/packages/'
     | '/plugins/'
     | '/skills/'
     | '/souls/'
+    | '/settings/security/password'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -347,12 +368,14 @@ export interface FileRouteTypes {
     | '/plugins/$name'
     | '/plugins/new'
     | '/settings/security'
+    | '/settings/password'
     | '/souls/$slug'
     | '/u/$handle'
     | '/packages'
     | '/plugins'
     | '/skills'
     | '/souls'
+    | '/settings/security/password'
   id:
     | '__root__'
     | '/'
@@ -379,12 +402,14 @@ export interface FileRouteTypes {
     | '/plugins/$name'
     | '/plugins/new'
     | '/settings/security'
+    | '/settings_/password'
     | '/souls/$slug'
     | '/u/$handle'
     | '/packages/'
     | '/plugins/'
     | '/skills/'
     | '/souls/'
+    | '/settings/security/password'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -410,6 +435,7 @@ export interface RootRouteChildren {
   PackagesNewRoute: typeof PackagesNewRoute
   PluginsNameRoute: typeof PluginsNameRoute
   PluginsNewRoute: typeof PluginsNewRoute
+  SettingsPasswordRoute: typeof SettingsPasswordRoute
   SoulsSlugRoute: typeof SoulsSlugRoute
   UHandleRoute: typeof UHandleRoute
   PackagesIndexRoute: typeof PackagesIndexRoute
@@ -567,6 +593,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SoulsSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings_/password': {
+      id: '/settings_/password'
+      path: '/settings/password'
+      fullPath: '/settings/password'
+      preLoaderRoute: typeof SettingsPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings/security': {
       id: '/settings/security'
       path: '/security'
@@ -630,6 +663,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OwnerSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/security/password': {
+      id: '/settings/security/password'
+      path: '/password'
+      fullPath: '/settings/security/password'
+      preLoaderRoute: typeof SettingsSecurityPasswordRouteImport
+      parentRoute: typeof SettingsSecurityRoute
+    }
   }
 }
 
@@ -643,12 +683,23 @@ const LoginRouteChildren: LoginRouteChildren = {
 
 const LoginRouteWithChildren = LoginRoute._addFileChildren(LoginRouteChildren)
 
+interface SettingsSecurityRouteChildren {
+  SettingsSecurityPasswordRoute: typeof SettingsSecurityPasswordRoute
+}
+
+const SettingsSecurityRouteChildren: SettingsSecurityRouteChildren = {
+  SettingsSecurityPasswordRoute: SettingsSecurityPasswordRoute,
+}
+
+const SettingsSecurityRouteWithChildren =
+  SettingsSecurityRoute._addFileChildren(SettingsSecurityRouteChildren)
+
 interface SettingsRouteChildren {
-  SettingsSecurityRoute: typeof SettingsSecurityRoute
+  SettingsSecurityRoute: typeof SettingsSecurityRouteWithChildren
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
-  SettingsSecurityRoute: SettingsSecurityRoute,
+  SettingsSecurityRoute: SettingsSecurityRouteWithChildren,
 }
 
 const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
@@ -678,6 +729,7 @@ const rootRouteChildren: RootRouteChildren = {
   PackagesNewRoute: PackagesNewRoute,
   PluginsNameRoute: PluginsNameRoute,
   PluginsNewRoute: PluginsNewRoute,
+  SettingsPasswordRoute: SettingsPasswordRoute,
   SoulsSlugRoute: SoulsSlugRoute,
   UHandleRoute: UHandleRoute,
   PackagesIndexRoute: PackagesIndexRoute,

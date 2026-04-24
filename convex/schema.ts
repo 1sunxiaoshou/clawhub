@@ -112,6 +112,10 @@ const moderationStatusValidator = v.optional(
   v.union(v.literal("active"), v.literal("hidden"), v.literal("removed")),
 );
 
+const skillVisibilityValidator = v.optional(
+  v.union(v.literal("public"), v.literal("restricted"), v.literal("private")),
+);
+
 const packageFamilyValidator = v.union(
   v.literal("skill"),
   v.literal("code-plugin"),
@@ -254,6 +258,7 @@ const skills = defineTable({
   ),
   tags: v.record(v.string(), v.id("skillVersions")),
   capabilityTags: v.optional(v.array(v.string())),
+  visibility: skillVisibilityValidator,
   softDeletedAt: v.optional(v.number()),
   badges: badgesValidator,
   moderationStatus: moderationStatusValidator,
@@ -370,6 +375,18 @@ const skillSlugAliases = defineTable({
   .index("by_skill", ["skillId"])
   .index("by_owner", ["ownerUserId"])
   .index("by_owner_publisher", ["ownerPublisherId"]);
+
+const skillAccessGrants = defineTable({
+  skillId: v.id("skills"),
+  subjectType: v.union(v.literal("user"), v.literal("publisher")),
+  subjectUserId: v.optional(v.id("users")),
+  subjectPublisherId: v.optional(v.id("publishers")),
+  createdByUserId: v.id("users"),
+  createdAt: v.number(),
+})
+  .index("by_skill", ["skillId"])
+  .index("by_skill_user", ["skillId", "subjectUserId"])
+  .index("by_skill_publisher", ["skillId", "subjectPublisherId"]);
 
 const souls = defineTable({
   slug: v.string(),
@@ -594,6 +611,7 @@ const skillSearchDigest = defineTable({
   ),
   tags: v.record(v.string(), v.id("skillVersions")),
   capabilityTags: v.optional(v.array(v.string())),
+  visibility: skillVisibilityValidator,
   badges: badgesValidator,
   stats: statsValidator,
   statsDownloads: v.optional(v.number()),
@@ -1376,6 +1394,7 @@ export default defineSchema({
   publisherMembers,
   skills,
   skillSlugAliases,
+  skillAccessGrants,
   packages,
   packageReleases,
   packageTrustedPublishers,

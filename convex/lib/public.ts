@@ -25,6 +25,7 @@ export type PublicSkill = Pick<
   | "latestVersionId"
   | "tags"
   | "capabilityTags"
+  | "visibility"
   | "badges"
   | "stats"
   | "createdAt"
@@ -52,6 +53,7 @@ export type HydratableSkill = Pick<
   | "latestVersionSummary"
   | "tags"
   | "capabilityTags"
+  | "visibility"
   | "badges"
   | "stats"
   | "statsDownloads"
@@ -144,6 +146,7 @@ export function toPublicSkill(skill: HydratableSkill | null | undefined): Public
     latestVersionId: skill.latestVersionId,
     tags: skill.tags,
     capabilityTags: skill.capabilityTags,
+    visibility: skill.visibility,
     badges: skill.badges,
     stats,
     createdAt: skill.createdAt,

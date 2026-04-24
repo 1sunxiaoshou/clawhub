@@ -15,6 +15,7 @@ function makeSkill(overrides: Partial<Doc<"skills">> = {}): Doc<"skills"> {
     latestVersionId: undefined,
     tags: {},
     badges: {},
+    visibility: undefined,
     moderationStatus: "active",
     moderationReason: undefined,
     moderationNotes: undefined,
@@ -69,6 +70,11 @@ describe("public skill mapping", () => {
   it("returns skill when moderationStatus is active", () => {
     const skill = makeSkill({ moderationStatus: "active" });
     expect(toPublicSkill(skill)).not.toBeNull();
+  });
+
+  it("filters out restricted and private skills from public mapping", () => {
+    expect(toPublicSkill(makeSkill({ visibility: "restricted" }))).toBeNull();
+    expect(toPublicSkill(makeSkill({ visibility: "private" }))).toBeNull();
   });
 
   it("filters out skill when moderationStatus is hidden", () => {

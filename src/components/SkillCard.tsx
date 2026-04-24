@@ -32,7 +32,12 @@ export function SkillCard({
   const hasTags = badges.length || chip || platformLabels?.length;
 
   return (
-    <Link to={link} className="card skill-card">
+    <Link
+      to={link}
+      params={(current) => current}
+      search={(current) => current}
+      className="card skill-card"
+    >
       {hasTags ? (
         <div className="skill-card-tags">
           {badges.map((label) => (

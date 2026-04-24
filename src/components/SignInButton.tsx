@@ -1,5 +1,6 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import type { ComponentProps } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { getUserFacingAuthError } from "../lib/authErrorMessage";
 import { useI18n } from "../lib/i18n";
@@ -21,6 +22,7 @@ export function SignInButton({
 }: SignInButtonProps) {
   const { signIn } = useAuthActions();
   const { t } = useI18n();
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const fallbackMessage = "Sign in failed. Please try again.";
 
   return (
@@ -39,13 +41,22 @@ export function SignInButton({
           return;
         }
         clearAuthError();
+        setIsSigningIn(true);
         void signIn(provider, next ? { redirectTo: next } : undefined)
+          .then((result) => {
+            if (result.signingIn === false) {
+              reportAuthError(fallbackMessage);
+              setIsSigningIn(false);
+            }
+          })
           .catch((error) => {
             const message = getUserFacingAuthError(error, fallbackMessage);
             reportAuthError(message);
+            setIsSigningIn(false);
           });
       }}
       {...props}
+      loading={props.loading || isSigningIn}
     >
       {children ?? t("header.signIn")}
     </Button>

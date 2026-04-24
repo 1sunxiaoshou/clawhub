@@ -83,6 +83,21 @@ type DuplicateCandidateEntry = {
   owner: Doc<"users"> | null;
 };
 
+type SkillAccessGrantEntry = Doc<"skillAccessGrants"> & {
+  user: {
+    _id: Id<"users">;
+    handle?: string | null;
+    name?: string | null;
+    displayName?: string | null;
+  } | null;
+  publisher: {
+    _id: Id<"publishers">;
+    handle: string;
+    displayName: string;
+    kind: "user" | "org";
+  } | null;
+};
+
 type SkillBySlugResult = {
   skill: Doc<"skills">;
   latestVersion: Doc<"skillVersions"> | null;
@@ -136,6 +151,10 @@ function Management() {
     staff && selectedSlug ? { slug: selectedSlug, auditLogLimit: SKILL_AUDIT_LOG_LIMIT } : "skip",
   ) as SkillBySlugResult | undefined;
   const selectedSkillId = selectedSkill?.skill?._id ?? null;
+  const accessGrants = useQuery(
+    api.skills.listAccessGrants,
+    staff && selectedSkillId ? { skillId: selectedSkillId } : "skip",
+  ) as SkillAccessGrantEntry[] | undefined;
   const recentVersions = useQuery(api.skills.listRecentVersions, staff ? { limit: 20 } : "skip") as
     | RecentVersionEntry[]
     | undefined;
@@ -160,6 +179,9 @@ function Management() {
   const setSkillManualOverride = useMutation(api.skills.setSkillManualOverride);
   const clearSkillManualOverride = useMutation(api.skills.clearSkillManualOverride);
   const setSkillCapabilityTags = useMutation(api.skills.setSkillCapabilityTags);
+  const setVisibility = useMutation(api.skills.setVisibility);
+  const grantAccess = useMutation(api.skills.grantAccess);
+  const revokeAccess = useMutation(api.skills.revokeAccess);
 
   const [selectedDuplicate, setSelectedDuplicate] = useState("");
   const [selectedOwner, setSelectedOwner] = useState("");
@@ -168,6 +190,8 @@ function Management() {
   const [userSearch, setUserSearch] = useState("");
   const [userSearchDebounced, setUserSearchDebounced] = useState("");
   const [skillOverrideNote, setSkillOverrideNote] = useState("");
+  const [accessSubjectType, setAccessSubjectType] = useState<"user" | "publisher">("user");
+  const [accessHandle, setAccessHandle] = useState("");
 
   const userQuery = userSearchDebounced.trim();
   const userResult = useQuery(
@@ -186,6 +210,8 @@ function Management() {
 
   useEffect(() => {
     setSkillOverrideNote("");
+    setAccessSubjectType("user");
+    setAccessHandle("");
   }, [selectedSkillId]);
 
   useEffect(() => {
@@ -310,6 +336,35 @@ function Management() {
       .catch((error) => toast.error(formatMutationError(error)));
   };
 
+  const updateSkillVisibility = (visibility: "public" | "restricted" | "private") => {
+    if (!selectedSkill?.skill) return;
+    void setVisibility({ skillId: selectedSkill.skill._id, visibility })
+      .then(() => toast.success(t("management.access.visibilityUpdated")))
+      .catch((error) => toast.error(formatMutationError(error)));
+  };
+
+  const addAccessGrant = () => {
+    if (!selectedSkill?.skill) return;
+    const handle = accessHandle.trim().replace(/^@+/, "").toLowerCase();
+    if (!handle) return;
+    void grantAccess({
+      skillId: selectedSkill.skill._id,
+      subjectType: accessSubjectType,
+      ...(accessSubjectType === "user" ? { userHandle: handle } : { publisherHandle: handle }),
+    })
+      .then(() => {
+        setAccessHandle("");
+        toast.success(t("management.access.grantAdded"));
+      })
+      .catch((error) => toast.error(formatMutationError(error)));
+  };
+
+  const removeAccessGrant = (grantId: Id<"skillAccessGrants">) => {
+    void revokeAccess({ grantId })
+      .then(() => toast.success(t("management.access.grantRevoked")))
+      .catch((error) => toast.error(formatMutationError(error)));
+  };
+
   function formatTimestamp(value: number) {
     return formatDateTime(value);
   }
@@ -358,6 +413,15 @@ function Management() {
     }
     if (action === "skill.owner.change") {
       return t("management.auditSummary.ownerChanged");
+    }
+    if (action === "skill.visibility.set") {
+      return t("management.auditSummary.visibilityChanged");
+    }
+    if (action === "skill.access.grant") {
+      return t("management.auditSummary.accessGranted");
+    }
+    if (action === "skill.access.revoke") {
+      return t("management.auditSummary.accessRevoked");
     }
     if (action === "skill.duplicate.set") {
       return t("management.auditSummary.duplicateSet");
@@ -413,6 +477,20 @@ function Management() {
           to: to ?? t("management.auditSummary.unknownUser"),
         });
       }
+    }
+
+    if (action === "skill.visibility.set") {
+      const from = typeof record.from === "string" ? record.from : "public";
+      const to = typeof record.to === "string" ? record.to : "public";
+      return t("management.auditSummary.fromTo", { from, to });
+    }
+
+    if (action === "skill.access.grant" || action === "skill.access.revoke") {
+      const subjectType = typeof record.subjectType === "string" ? record.subjectType : null;
+      const userId = typeof record.subjectUserId === "string" ? record.subjectUserId : null;
+      const publisherId =
+        typeof record.subjectPublisherId === "string" ? record.subjectPublisherId : null;
+      return subjectType ? `${subjectType}: ${userId ?? publisherId ?? "unknown"}` : null;
     }
 
     if (action === "skill.duplicate.set") {
@@ -633,6 +711,8 @@ function Management() {
                   const isOwnerAdmin = owner?.role === "admin";
                   const canBanOwner =
                     staff && ownerUserId && ownerUserId !== me?._id && (admin || !isOwnerAdmin);
+                  const visibility = skill.visibility ?? "public";
+                  const grantEntries = accessGrants ?? [];
 
                   return (
                     <div
@@ -673,6 +753,125 @@ function Management() {
                                 <span>{t(`skills.capabilities.${tag}`) || SKILL_CAPABILITY_LABELS[tag] || tag}</span>
                               </label>
                             ))}
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2 border-l-2 border-[color:var(--line)] pl-4">
+                          <div className="text-sm text-[color:var(--ink-soft)]">
+                            {t("management.access.title")}
+                          </div>
+                          <div className="grid gap-4 md:grid-cols-[minmax(180px,240px)_1fr]">
+                            <label className="flex flex-col gap-2">
+                              <span className="font-mono text-xs">
+                                {t("management.access.visibility")}
+                              </span>
+                              <select
+                                className="min-h-[44px] rounded-[var(--radius-sm)] border border-[rgba(29,59,78,0.22)] bg-[rgba(255,255,255,0.94)] px-3.5 py-[13px] text-[color:var(--ink)] transition-all duration-[180ms] ease-out dark:border-[rgba(255,255,255,0.12)] dark:bg-[rgba(14,28,37,0.84)]"
+                                value={visibility}
+                                onChange={(event) => {
+                                  const next = event.target.value;
+                                  if (
+                                    next === "public" ||
+                                    next === "restricted" ||
+                                    next === "private"
+                                  ) {
+                                    updateSkillVisibility(next);
+                                  }
+                                }}
+                              >
+                                <option value="public">{t("management.access.public")}</option>
+                                <option value="restricted">
+                                  {t("management.access.restricted")}
+                                </option>
+                                <option value="private">{t("management.access.private")}</option>
+                              </select>
+                            </label>
+                            <div className="flex flex-col gap-2">
+                              <span className="font-mono text-xs">
+                                {t("management.access.addGrant")}
+                              </span>
+                              <div className="grid gap-2 sm:grid-cols-[150px_1fr_auto]">
+                                <select
+                                  className="min-h-[38px] rounded-[var(--radius-sm)] border border-[rgba(29,59,78,0.22)] bg-[rgba(255,255,255,0.94)] px-3 py-2 text-[color:var(--ink)] dark:border-[rgba(255,255,255,0.12)] dark:bg-[rgba(14,28,37,0.84)]"
+                                  value={accessSubjectType}
+                                  onChange={(event) => {
+                                    const next = event.target.value;
+                                    setAccessSubjectType(
+                                      next === "publisher" ? "publisher" : "user",
+                                    );
+                                  }}
+                                >
+                                  <option value="user">{t("management.access.user")}</option>
+                                  <option value="publisher">
+                                    {t("management.access.organization")}
+                                  </option>
+                                </select>
+                                <Input
+                                  value={accessHandle}
+                                  onChange={(event) => setAccessHandle(event.target.value)}
+                                  placeholder={
+                                    accessSubjectType === "user"
+                                      ? t("management.access.userPlaceholder")
+                                      : t("management.access.publisherPlaceholder")
+                                  }
+                                />
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={!accessHandle.trim()}
+                                  onClick={addAccessGrant}
+                                >
+                                  {t("management.access.grant")}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                          {visibility === "private" ? (
+                            <p className="text-xs text-[color:var(--ink-soft)]">
+                              {t("management.access.privateDesc")}
+                            </p>
+                          ) : null}
+                          <div className="flex flex-col gap-2">
+                            {accessGrants === undefined ? (
+                              <Skeleton className="h-10 w-full" />
+                            ) : grantEntries.length === 0 ? (
+                              <div className="text-sm text-[color:var(--ink-soft)]">
+                                {t("management.access.noGrants")}
+                              </div>
+                            ) : (
+                              grantEntries.map((grant) => {
+                                const label =
+                                  grant.subjectType === "user"
+                                    ? formatManagementUserLabel(
+                                        grant.user,
+                                        String(grant.subjectUserId ?? ""),
+                                      )
+                                    : `@${grant.publisher?.handle ?? grant.subjectPublisherId}`;
+                                const detail =
+                                  grant.subjectType === "user"
+                                    ? t("management.access.user")
+                                    : t("management.access.organization");
+                                return (
+                                  <div
+                                    key={grant._id}
+                                    className="flex items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-[color:var(--line)] px-3 py-2"
+                                  >
+                                    <div className="flex flex-col">
+                                      <span>{label}</span>
+                                      <span className="text-xs text-[color:var(--ink-soft)]">
+                                        {detail} · {formatTimestamp(grant.createdAt)}
+                                      </span>
+                                    </div>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => removeAccessGrant(grant._id)}
+                                    >
+                                      {t("management.access.revoke")}
+                                    </Button>
+                                  </div>
+                                );
+                              })
+                            )}
                           </div>
                         </div>
                         <div className="flex flex-col gap-2 border-l-2 border-[color:var(--line)] pl-4">

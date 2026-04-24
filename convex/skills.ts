@@ -51,7 +51,9 @@ import {
 } from "./lib/public";
 import {
   ensurePersonalPublisherForUser,
+  getActiveUserByHandleOrPersonalPublisher,
   getOwnerPublisher,
+  getPublisherByHandle,
   requirePublisherRole,
 } from "./lib/publishers";
 import {
@@ -76,6 +78,12 @@ import {
 } from "./lib/skillPublish";
 import { runStaticPublishScan } from "./lib/staticPublishScan";
 import { getFrontmatterValue, hashSkillFiles } from "./lib/skills";
+import {
+  canManageSkillAccess,
+  canReadSkill,
+  getSkillVisibility,
+  hasSkillAccessGrant,
+} from "./lib/skillAccess";
 import { computeIsSuspicious, isSkillSuspicious } from "./lib/skillSafety";
 import {
   digestToHydratableSkill,
@@ -1407,6 +1415,7 @@ export const getBySlug = query({
             )
             .unique()
         : null;
+    const actor = userId ? await ctx.db.get(userId) : null;
     const isOwner = Boolean(userId && (userId === skill.ownerUserId || membership));
 
     const latestVersion = toPublicSkillVersion(
@@ -1446,7 +1455,8 @@ export const getBySlug = query({
 
     // Non-owners can see malware-blocked skills (transparency), but not other hidden states
     // Owners can see all their moderated skills
-    if (!publicSkill && !isOwner && !isMalwareBlocked) return null;
+    const canRead = await canReadSkill(ctx, skill, actor);
+    if (!canRead && !isMalwareBlocked) return null;
 
     // For owners viewing their moderated skill, construct the response manually
     const skillData = publicSkill ?? {
@@ -1456,10 +1466,12 @@ export const getBySlug = query({
       displayName: skill.displayName,
       summary: skill.summary,
       ownerUserId: skill.ownerUserId,
+      ownerPublisherId: skill.ownerPublisherId,
       canonicalSkillId: skill.canonicalSkillId,
       forkOf: skill.forkOf,
       latestVersionId: skill.latestVersionId,
       tags: skill.tags,
+      visibility: skill.visibility,
       badges,
       stats: skill.stats,
       createdAt: skill.createdAt,
@@ -1497,6 +1509,17 @@ export const getBySlug = query({
       owner,
       pendingReview: isOwner && isPendingScan,
       moderationInfo,
+      access: {
+        visibility: getSkillVisibility(skill),
+        granted: Boolean(
+          userId &&
+            !isOwner &&
+            getSkillVisibility(skill) === "restricted" &&
+            (await hasSkillAccessGrant(ctx, { skillId: skill._id, userId })),
+        ),
+        canManage:
+          userId && actor ? await canManageSkillAccess(ctx, skill, actor) : false,
+      },
       forkOf: forkOfSkill
         ? {
             kind: skill.forkOf?.kind ?? "fork",
@@ -2138,6 +2161,7 @@ export const list = query({
                 forkOf: skill.forkOf,
                 latestVersionId: skill.latestVersionId,
                 tags: skill.tags,
+                visibility: skill.visibility,
                 badges,
                 stats: skill.stats,
                 createdAt: skill.createdAt,
@@ -2190,6 +2214,7 @@ export const list = query({
                 forkOf: skill.forkOf,
                 latestVersionId: skill.latestVersionId,
                 tags: skill.tags,
+                visibility: skill.visibility,
                 badges,
                 stats: skill.stats,
                 createdAt: skill.createdAt,
@@ -3270,6 +3295,8 @@ export const listVersions = query({
     const authUserId = await getAuthUserId(ctx);
     const actor = authUserId ? await ctx.db.get(authUserId) : null;
     const isStaff = actor?.role === "admin" || actor?.role === "moderator";
+    const skill = await ctx.db.get(args.skillId);
+    if (!skill || !(await canReadSkill(ctx, skill, actor))) return [];
     const versions = await ctx.db
       .query("skillVersions")
       .withIndex("by_skill", (q) => q.eq("skillId", args.skillId))
@@ -3289,6 +3316,12 @@ export const listVersionsPage = query({
   },
   handler: async (ctx, args) => {
     const limit = clampInt(args.limit ?? 20, 1, MAX_LIST_LIMIT);
+    const authUserId = await getAuthUserId(ctx);
+    const actor = authUserId ? await ctx.db.get(authUserId) : null;
+    const skill = await ctx.db.get(args.skillId);
+    if (!skill || !(await canReadSkill(ctx, skill, actor))) {
+      return { items: [], nextCursor: null };
+    }
     const { page, isDone, continueCursor } = await ctx.db
       .query("skillVersions")
       .withIndex("by_skill", (q) => q.eq("skillId", args.skillId))
@@ -3303,7 +3336,15 @@ export const listVersionsPage = query({
 
 export const getVersionById = query({
   args: { versionId: v.id("skillVersions") },
-  handler: async (ctx, args) => toPublicSkillVersion(await ctx.db.get(args.versionId)),
+  handler: async (ctx, args) => {
+    const version = await ctx.db.get(args.versionId);
+    if (!version) return null;
+    const skill = await ctx.db.get(version.skillId);
+    const authUserId = await getAuthUserId(ctx);
+    const actor = authUserId ? await ctx.db.get(authUserId) : null;
+    if (!skill || !(await canReadSkill(ctx, skill, actor))) return null;
+    return toPublicSkillVersion(version);
+  },
 });
 
 export const getVersionsByIdsInternal = internalQuery({
@@ -3336,6 +3377,19 @@ export const getVersionBySkillAndVersionInternal = internalQuery({
 export const getSkillByIdInternal = internalQuery({
   args: { skillId: v.id("skills") },
   handler: async (ctx, args) => ctx.db.get(args.skillId),
+});
+
+export const canReadSkillInternal = internalQuery({
+  args: {
+    skillId: v.id("skills"),
+    userId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const skill = await ctx.db.get(args.skillId);
+    if (!skill) return false;
+    const actor = args.userId ? await ctx.db.get(args.userId) : null;
+    return await canReadSkill(ctx, skill, actor);
+  },
 });
 
 export const getPendingScanSkillsInternal = internalQuery({
@@ -4802,6 +4856,10 @@ export const getVersionBySkillAndVersion = query({
         q.eq("skillId", args.skillId).eq("version", args.version),
       )
       .unique();
+    const skill = await ctx.db.get(args.skillId);
+    const authUserId = await getAuthUserId(ctx);
+    const actor = authUserId ? await ctx.db.get(authUserId) : null;
+    if (!skill || !(await canReadSkill(ctx, skill, actor))) return null;
     return toPublicSkillVersion(version);
   },
 });
@@ -4873,29 +4931,13 @@ async function canReadSkillVersionFiles(ctx: ActionCtx, version: Doc<"skillVersi
   if (!skill) return false;
 
   const authUserId = await getAuthUserId(ctx);
-  if (authUserId) {
-    if (authUserId === skill.ownerUserId && !skill.softDeletedAt && !version.softDeletedAt) {
-      return true;
-    }
-    if (skill.ownerPublisherId && !skill.softDeletedAt && !version.softDeletedAt) {
-      const memberRole = (await ctx.runQuery(internal.publishers.getMemberRoleInternal, {
-        publisherId: skill.ownerPublisherId,
-        userId: authUserId,
-      })) as "owner" | "admin" | "publisher" | null;
-      if (memberRole) {
-        return true;
-      }
-    }
-    const actor = (await ctx.runQuery(internal.users.getByIdInternal, {
-      userId: authUserId,
-    })) as Doc<"users"> | null;
-    if (actor?.role === "admin" || actor?.role === "moderator") return true;
-  }
-
-  if (skill.softDeletedAt || version.softDeletedAt) return false;
-
   const isMalwareBlocked = skill.moderationFlags?.includes("blocked.malware") ?? false;
-  return Boolean(toPublicSkill(skill) || isMalwareBlocked);
+  if (version.softDeletedAt) return false;
+  if (isMalwareBlocked) return true;
+  return (await ctx.runQuery(internal.skills.canReadSkillInternal, {
+    skillId: skill._id,
+    userId: authUserId ?? undefined,
+  })) as boolean;
 }
 
 export const getReadme: ReturnType<typeof action> = action({
@@ -5359,6 +5401,173 @@ export const changeOwner = mutation({
       metadata: { from: skill.ownerUserId, to: args.ownerUserId },
       createdAt: now,
     });
+  },
+});
+
+const skillVisibilityArg = v.union(
+  v.literal("public"),
+  v.literal("restricted"),
+  v.literal("private"),
+);
+
+export const setVisibility = mutation({
+  args: {
+    skillId: v.id("skills"),
+    visibility: skillVisibilityArg,
+  },
+  handler: async (ctx, args) => {
+    const { user } = await requireUser(ctx);
+    const skill = await ctx.db.get(args.skillId);
+    if (!skill) throw new ConvexError("Skill not found");
+    if (!(await canManageSkillAccess(ctx, skill, user))) throw new ConvexError("Forbidden");
+
+    const now = Date.now();
+    const patch: Partial<Doc<"skills">> = {
+      visibility: args.visibility,
+      updatedAt: now,
+    };
+    const nextSkill = { ...skill, ...patch };
+    await ctx.db.patch(skill._id, patch);
+    await adjustGlobalPublicCountForSkillChange(ctx, skill, nextSkill);
+
+    await ctx.db.insert("auditLogs", {
+      actorUserId: user._id,
+      action: "skill.visibility.set",
+      targetType: "skill",
+      targetId: skill._id,
+      metadata: { from: getSkillVisibility(skill), to: args.visibility },
+      createdAt: now,
+    });
+
+    return { ok: true as const, visibility: args.visibility };
+  },
+});
+
+export const listAccessGrants = query({
+  args: { skillId: v.id("skills") },
+  handler: async (ctx, args) => {
+    const { user } = await requireUser(ctx);
+    const skill = await ctx.db.get(args.skillId);
+    if (!skill) throw new ConvexError("Skill not found");
+    if (!(await canManageSkillAccess(ctx, skill, user))) throw new ConvexError("Forbidden");
+
+    const grants = await ctx.db
+      .query("skillAccessGrants")
+      .withIndex("by_skill", (q) => q.eq("skillId", args.skillId))
+      .collect();
+    return await Promise.all(
+      grants.map(async (grant) => ({
+        ...grant,
+        user: grant.subjectUserId ? toPublicUser(await ctx.db.get(grant.subjectUserId)) : null,
+        publisher: grant.subjectPublisherId
+          ? toPublicPublisher(await ctx.db.get(grant.subjectPublisherId))
+          : null,
+      })),
+    );
+  },
+});
+
+export const grantAccess = mutation({
+  args: {
+    skillId: v.id("skills"),
+    subjectType: v.union(v.literal("user"), v.literal("publisher")),
+    userHandle: v.optional(v.string()),
+    userId: v.optional(v.id("users")),
+    publisherHandle: v.optional(v.string()),
+    publisherId: v.optional(v.id("publishers")),
+  },
+  handler: async (ctx, args) => {
+    const { user } = await requireUser(ctx);
+    const skill = await ctx.db.get(args.skillId);
+    if (!skill) throw new ConvexError("Skill not found");
+    if (!(await canManageSkillAccess(ctx, skill, user))) throw new ConvexError("Forbidden");
+
+    let subjectUserId: Id<"users"> | undefined;
+    let subjectPublisherId: Id<"publishers"> | undefined;
+    if (args.subjectType === "user") {
+      const targetUser = args.userId
+        ? await ctx.db.get(args.userId)
+        : await getActiveUserByHandleOrPersonalPublisher(ctx, args.userHandle);
+      if (!targetUser || targetUser.deletedAt || targetUser.deactivatedAt) {
+        throw new ConvexError("User not found");
+      }
+      subjectUserId = targetUser._id;
+    } else {
+      const targetPublisher = args.publisherId
+        ? await ctx.db.get(args.publisherId)
+        : await getPublisherByHandle(ctx, args.publisherHandle);
+      if (!targetPublisher || targetPublisher.deletedAt || targetPublisher.deactivatedAt) {
+        throw new ConvexError("Publisher not found");
+      }
+      subjectPublisherId = targetPublisher._id;
+    }
+
+    const existing =
+      args.subjectType === "user"
+        ? await ctx.db
+            .query("skillAccessGrants")
+            .withIndex("by_skill_user", (q) =>
+              q.eq("skillId", skill._id).eq("subjectUserId", subjectUserId),
+            )
+            .unique()
+        : await ctx.db
+            .query("skillAccessGrants")
+            .withIndex("by_skill_publisher", (q) =>
+              q.eq("skillId", skill._id).eq("subjectPublisherId", subjectPublisherId),
+            )
+            .unique();
+    if (existing) return { ok: true as const, grantId: existing._id, alreadyGranted: true };
+
+    const now = Date.now();
+    const grantId = await ctx.db.insert("skillAccessGrants", {
+      skillId: skill._id,
+      subjectType: args.subjectType,
+      subjectUserId,
+      subjectPublisherId,
+      createdByUserId: user._id,
+      createdAt: now,
+    });
+    await ctx.db.insert("auditLogs", {
+      actorUserId: user._id,
+      action: "skill.access.grant",
+      targetType: "skill",
+      targetId: skill._id,
+      metadata: {
+        grantId,
+        subjectType: args.subjectType,
+        subjectUserId,
+        subjectPublisherId,
+      },
+      createdAt: now,
+    });
+    return { ok: true as const, grantId, alreadyGranted: false };
+  },
+});
+
+export const revokeAccess = mutation({
+  args: { grantId: v.id("skillAccessGrants") },
+  handler: async (ctx, args) => {
+    const { user } = await requireUser(ctx);
+    const grant = await ctx.db.get(args.grantId);
+    if (!grant) return { ok: true as const };
+    const skill = await ctx.db.get(grant.skillId);
+    if (!skill) throw new ConvexError("Skill not found");
+    if (!(await canManageSkillAccess(ctx, skill, user))) throw new ConvexError("Forbidden");
+    await ctx.db.delete(grant._id);
+    await ctx.db.insert("auditLogs", {
+      actorUserId: user._id,
+      action: "skill.access.revoke",
+      targetType: "skill",
+      targetId: skill._id,
+      metadata: {
+        grantId: grant._id,
+        subjectType: grant.subjectType,
+        subjectUserId: grant.subjectUserId,
+        subjectPublisherId: grant.subjectPublisherId,
+      },
+      createdAt: Date.now(),
+    });
+    return { ok: true as const };
   },
 });
 
@@ -6375,6 +6584,7 @@ export const insertVersion = internalMutation({
         latestVersionId: undefined,
         tags: {},
         capabilityTags: args.capabilityTags,
+        visibility: "public",
         softDeletedAt: undefined,
         badges: {
           redactionApproved: undefined,
@@ -6490,6 +6700,7 @@ export const insertVersion = internalMutation({
       },
       tags: nextTags,
       capabilityTags: args.capabilityTags,
+      visibility: skill.visibility ?? "public",
       stats: { ...skill.stats, versions: skill.stats.versions + 1 },
       softDeletedAt: undefined,
       moderationStatus: initialModerationStatus,

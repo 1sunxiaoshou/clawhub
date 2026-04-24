@@ -366,9 +366,17 @@ export function GithubImport() {
       });
       toast.success(t("import.imported"));
       if (isAuthenticated && me) {
-        void navigate({ to: "/dashboard" });
+        void navigate({
+          to: "/dashboard",
+          params: (current) => current,
+          search: (current) => current,
+        });
       } else {
-        void navigate({ to: `/local/${encodeURIComponent(slug.trim())}` });
+        void navigate({
+          to: `/local/${encodeURIComponent(slug.trim())}`,
+          params: (current) => current,
+          search: (current) => current,
+        });
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));

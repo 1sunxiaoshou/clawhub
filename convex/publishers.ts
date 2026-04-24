@@ -539,6 +539,59 @@ export const createOrg = mutation({
   },
 });
 
+export const deleteOrg = mutation({
+  args: { publisherId: v.id("publishers") },
+  handler: async (ctx, args) => {
+    const { userId } = await requireUser(ctx);
+    const publisher = await ctx.db.get(args.publisherId);
+    if (!publisher || publisher.deletedAt || publisher.deactivatedAt || publisher.kind !== "org") {
+      throw new ConvexError("Organization not found");
+    }
+
+    const membership = await getPublisherMembership(ctx, publisher._id, userId);
+    if (!membership || membership.role !== "owner") {
+      throw new ConvexError("Only org owners can delete an organization");
+    }
+
+    const [skill, pkg, soul] = await Promise.all([
+      ctx.db
+        .query("skills")
+        .withIndex("by_owner_publisher", (q) => q.eq("ownerPublisherId", publisher._id))
+        .first(),
+      ctx.db
+        .query("packages")
+        .withIndex("by_owner_publisher", (q) => q.eq("ownerPublisherId", publisher._id))
+        .first(),
+      ctx.db
+        .query("souls")
+        .withIndex("by_owner_publisher", (q) => q.eq("ownerPublisherId", publisher._id))
+        .first(),
+    ]);
+    if (skill || pkg || soul) {
+      throw new ConvexError("Organizations with published content cannot be deleted");
+    }
+
+    const now = Date.now();
+    const members = await ctx.db
+      .query("publisherMembers")
+      .withIndex("by_publisher", (q) => q.eq("publisherId", publisher._id))
+      .collect();
+    for (const member of members) {
+      await ctx.db.delete(member._id);
+    }
+    await ctx.db.patch(publisher._id, { deletedAt: now, updatedAt: now });
+    await ctx.db.insert("auditLogs", {
+      actorUserId: userId,
+      action: "publisher.delete",
+      targetType: "publisher",
+      targetId: publisher._id,
+      metadata: { kind: "org", handle: publisher.handle },
+      createdAt: now,
+    });
+    return { ok: true };
+  },
+});
+
 export const migrateLegacyPublisherHandleToOrg = mutation({
   args: {
     handle: v.string(),

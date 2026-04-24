@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { getAuthUserId, modifyAccountCredentials, retrieveAccount } from "@convex-dev/auth/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -209,15 +209,32 @@ export const getLoginMethods = query({
         .unique(),
     ]);
     const linkedCount = [password, github, wecom].filter(Boolean).length;
+    const githubAccountName = user.handle ?? user.name ?? github?.providerAccountId;
+    const wecomAccountName = user.name ?? user.displayName ?? wecom?.providerAccountId;
 
     return {
       primaryLoginMethod: user.primaryLoginMethod ?? null,
       lastLoginAt: user.lastLoginAt ?? null,
       lastLoginMethod: user.lastLoginMethod ?? null,
       methods: [
-        { provider: "password" as const, linked: password !== null, canUnlink: linkedCount > 1 },
-        { provider: "github" as const, linked: github !== null, canUnlink: linkedCount > 1 },
-        { provider: "wecom" as const, linked: wecom !== null, canUnlink: linkedCount > 1 },
+        {
+          provider: "password" as const,
+          linked: password !== null,
+          canUnlink: linkedCount > 1,
+          accountName: password ? (user.email ?? password.providerAccountId) : null,
+        },
+        {
+          provider: "github" as const,
+          linked: github !== null,
+          canUnlink: linkedCount > 1,
+          accountName: github ? githubAccountName : null,
+        },
+        {
+          provider: "wecom" as const,
+          linked: wecom !== null,
+          canUnlink: linkedCount > 1,
+          accountName: wecom ? wecomAccountName : null,
+        },
       ],
     };
   },
@@ -472,20 +489,45 @@ export const changePassword = action({
   },
   handler: async (ctx, args) => {
     const userId = (await getAuthUserId(ctx)) as Id<"users"> | null;
-    if (!userId) throw new Error("Unauthorized");
+    if (!userId) throw new ConvexError("Unauthorized");
+    const currentPassword = args.currentPassword.trim();
+    const newPassword = args.newPassword.trim();
+    if (!currentPassword) throw new ConvexError("Current password is required.");
+    if (!newPassword) throw new ConvexError("New password is required.");
+    if (newPassword.length < 8) {
+      throw new ConvexError("Password must be at least 8 characters.");
+    }
+    if (currentPassword === newPassword) {
+      throw new ConvexError("New password must be different from the current password.");
+    }
     const user = await ctx.runQuery(internal.users.getByIdInternal, { userId });
     const email = user?.email?.trim().toLowerCase();
     if (!email) {
-      throw new Error("No email is available for this account.");
+      throw new ConvexError("No email is available for this account.");
     }
-    await retrieveAccount(ctx, {
-      provider: "password",
-      account: { id: email, secret: args.currentPassword },
-    });
-    await modifyAccountCredentials(ctx, {
-      provider: "password",
-      account: { id: email, secret: args.newPassword },
-    });
+    try {
+      await retrieveAccount(ctx, {
+        provider: "password",
+        account: { id: email, secret: currentPassword },
+      });
+    } catch (error) {
+      const message = getErrorMessage(error);
+      if (message.includes("InvalidSecret")) {
+        throw new ConvexError("Current password is incorrect.");
+      }
+      if (message.includes("AccountNotFound") || message.includes("not found")) {
+        throw new ConvexError("Password sign in is not enabled for this account.");
+      }
+      throw new ConvexError("Unable to verify the current password.");
+    }
+    try {
+      await modifyAccountCredentials(ctx, {
+        provider: "password",
+        account: { id: email, secret: newPassword },
+      });
+    } catch {
+      throw new ConvexError("Unable to update password. Please try again.");
+    }
     await ctx.runMutation(internal.users.recordLoginMetadataInternal, {
       userId,
       method: "password",
@@ -493,6 +535,12 @@ export const changePassword = action({
     });
   },
 });
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  return "";
+}
 
 export const list = query({
   args: { limit: v.optional(v.number()), search: v.optional(v.string()) },

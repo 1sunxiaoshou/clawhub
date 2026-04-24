@@ -141,7 +141,11 @@ export default function Header() {
   return (
     <header
       className={`site-header top-0 z-50 w-full border-b border-border/10 transition-colors ${
-        isHomePage ? "home-header absolute left-0 right-0" : isAuthPage ? "absolute left-0 right-0 border-transparent bg-transparent" : "sticky"
+        isHomePage
+          ? "home-header absolute left-0 right-0"
+          : isAuthPage
+            ? "absolute left-0 right-0 border-transparent bg-transparent"
+            : "content-header sticky"
       }`}
     >
       <div className="site-header-inner mx-auto grid h-[4.5rem] max-w-[1280px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 px-5">
