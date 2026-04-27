@@ -175,6 +175,11 @@ Notes:
 - `metadata.systems`: Nix system targets (e.g. `["aarch64-darwin", "x86_64-linux"]`). `null` if not declared.
 - `metadata` is `null` if the skill has no platform metadata.
 - `moderation` is included only when the skill is flagged or the owner is viewing it.
+- `moderation.isSuspicious=true` is a warning signal, not an API failure. Third-party
+  installers should surface a warning or require their own confirmation policy, but
+  they should not treat the detail response itself as failed.
+- `moderation.isMalwareBlocked=true` means the skill is malicious/blocked and must not
+  be installed. `/api/v1/download` also enforces this and returns an error.
 
 ### `GET /api/v1/skills/{slug}/moderation`
 
@@ -212,6 +217,9 @@ Notes:
 - Owners and staff can access moderation details for hidden skills.
 - Public callers only get `200` for already-flagged visible skills.
 - Evidence is redacted for public callers and only includes raw snippets for owners/staff.
+- A `suspicious` verdict means the skill is still visible/downloadable unless another
+  moderation state blocks it. A `malicious` verdict or `isMalwareBlocked=true` is the
+  hard block.
 
 ### `GET /api/v1/skills/{slug}/versions`
 
@@ -406,6 +414,10 @@ Notes:
 
 - If neither `version` nor `tag` is provided, the latest version is used.
 - Soft-deleted versions return `410`.
+- Malware-blocked skills return `403` and must not be installed.
+- Suspicious-but-not-malware skills are still downloadable. Clients that automate
+  installation should decide whether to warn, prompt, require a force flag, or skip
+  them according to their own policy.
 - Download stats are counted as unique identities per hour (`userId` when API token is valid, otherwise IP).
 
 ## Auth endpoints (Bearer token)

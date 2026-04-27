@@ -103,6 +103,7 @@ import type * as lib_webhooks from "../lib/webhooks.js";
 import type * as lib_zipUtils from "../lib/zipUtils.js";
 import type * as llmEval from "../llmEval.js";
 import type * as maintenance from "../maintenance.js";
+import type * as management from "../management.js";
 import type * as packagePublishTokens from "../packagePublishTokens.js";
 import type * as packages from "../packages.js";
 import type * as proxies from "../proxies.js";
@@ -230,6 +231,7 @@ declare const fullApi: ApiFromModules<{
   "lib/zipUtils": typeof lib_zipUtils;
   llmEval: typeof llmEval;
   maintenance: typeof maintenance;
+  management: typeof management;
   packagePublishTokens: typeof packagePublishTokens;
   packages: typeof packages;
   proxies: typeof proxies;

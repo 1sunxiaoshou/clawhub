@@ -102,9 +102,16 @@
           "owner": { "$ref": "#/components/schemas/Owner" },
           "moderation": {
             "type": ["object", "null"],
+            "description": "Present when the skill is flagged or the owner is viewing it. Suspicious is a warning state; malware blocked is a hard install/download block.",
             "properties": {
-              "isSuspicious": { "type": "boolean" },
-              "isMalwareBlocked": { "type": "boolean" },
+              "isSuspicious": {
+                "type": "boolean",
+                "description": "Warning signal only. The skill may still be visible/downloadable unless another moderation state blocks it."
+              },
+              "isMalwareBlocked": {
+                "type": "boolean",
+                "description": "Hard block. Clients must not install the skill; download also returns an error."
+              },
               "verdict": { "type": "string", "enum": ["clean", "suspicious", "malicious"] },
               "reasonCodes": { "type": "array", "items": { "type": "string" } },
               "summary": { "type": ["string", "null"] },
@@ -376,6 +383,7 @@
     "/api/v1/skills/{slug}/moderation": {
       "get": {
         "summary": "Get moderation details",
+        "description": "Returns structured moderation details when available. A suspicious verdict is a warning state; malicious or isMalwareBlocked=true is the hard block.",
         "parameters": [
           { "name": "slug", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
@@ -390,8 +398,14 @@
                     "moderation": {
                       "type": ["object", "null"],
                       "properties": {
-                        "isSuspicious": { "type": "boolean" },
-                        "isMalwareBlocked": { "type": "boolean" },
+                        "isSuspicious": {
+                          "type": "boolean",
+                          "description": "Warning signal only. The skill may still be visible/downloadable unless another moderation state blocks it."
+                        },
+                        "isMalwareBlocked": {
+                          "type": "boolean",
+                          "description": "Hard block. Clients must not install the skill; download also returns an error."
+                        },
                         "verdict": { "type": "string", "enum": ["clean", "suspicious", "malicious"] },
                         "reasonCodes": { "type": "array", "items": { "type": "string" } },
                         "summary": { "type": ["string", "null"] },
@@ -479,13 +493,15 @@
     "/api/v1/download": {
       "get": {
         "summary": "Download zip",
+        "description": "Downloads a skill version. Malware-blocked skills return 403. Suspicious-but-not-malware skills remain downloadable; installer clients should apply their own warning or confirmation policy.",
         "parameters": [
           { "name": "slug", "in": "query", "required": true, "schema": { "type": "string" } },
           { "name": "version", "in": "query", "required": false, "schema": { "type": "string" } },
           { "name": "tag", "in": "query", "required": false, "schema": { "type": "string" } }
         ],
         "responses": {
-          "200": { "description": "Zip", "content": { "application/zip": { "schema": { "type": "string", "format": "binary" } } } }
+          "200": { "description": "Zip", "content": { "application/zip": { "schema": { "type": "string", "format": "binary" } } } },
+          "403": { "description": "Forbidden, including malware-blocked skills" }
         }
       }
     },
