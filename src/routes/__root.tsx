@@ -154,8 +154,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 
 function InnerRootDocument({ children }: { children: React.ReactNode }) {
   const { locale } = useI18n();
-  const location = useLocation();
-  const hideSiteChrome = location.pathname === "/test";
 
   return (
     <html lang={locale}>
@@ -164,16 +162,12 @@ function InnerRootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <div className="app-shell">
-          {hideSiteChrome ? null : (
-            <>
-              <Header />
-              <ClientOnly>
-                <DeploymentDriftBanner />
-              </ClientOnly>
-            </>
-          )}
+          <Header />
+          <ClientOnly>
+            <DeploymentDriftBanner />
+          </ClientOnly>
           <RouteErrorBoundary>{children}</RouteErrorBoundary>
-          {hideSiteChrome ? null : <Footer />}
+          <Footer />
         </div>
         <Toaster
           position="bottom-right"

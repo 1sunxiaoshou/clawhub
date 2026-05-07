@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UploadRouteImport } from './routes/upload'
-import { Route as TestRouteImport } from './routes/test'
 import { Route as StarsRouteImport } from './routes/stars'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SearchRouteImport } from './routes/search'
@@ -46,11 +45,6 @@ import { Route as SettingsSecurityPasswordRouteImport } from './routes/settings.
 const UploadRoute = UploadRouteImport.update({
   id: '/upload',
   path: '/upload',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TestRoute = TestRouteImport.update({
-  id: '/test',
-  path: '/test',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StarsRoute = StarsRouteImport.update({
@@ -225,7 +219,6 @@ export interface FileRoutesByFullPath {
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRouteWithChildren
   '/stars': typeof StarsRoute
-  '/test': typeof TestRoute
   '/upload': typeof UploadRoute
   '/$owner/$slug': typeof OwnerSlugRoute
   '/cli/auth': typeof CliAuthRoute
@@ -260,7 +253,6 @@ export interface FileRoutesByTo {
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRouteWithChildren
   '/stars': typeof StarsRoute
-  '/test': typeof TestRoute
   '/upload': typeof UploadRoute
   '/$owner/$slug': typeof OwnerSlugRoute
   '/cli/auth': typeof CliAuthRoute
@@ -296,7 +288,6 @@ export interface FileRoutesById {
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRouteWithChildren
   '/stars': typeof StarsRoute
-  '/test': typeof TestRoute
   '/upload': typeof UploadRoute
   '/$owner/$slug': typeof OwnerSlugRoute
   '/cli/auth': typeof CliAuthRoute
@@ -333,7 +324,6 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/stars'
-    | '/test'
     | '/upload'
     | '/$owner/$slug'
     | '/cli/auth'
@@ -368,7 +358,6 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/stars'
-    | '/test'
     | '/upload'
     | '/$owner/$slug'
     | '/cli/auth'
@@ -403,7 +392,6 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/stars'
-    | '/test'
     | '/upload'
     | '/$owner/$slug'
     | '/cli/auth'
@@ -439,7 +427,6 @@ export interface RootRouteChildren {
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRouteWithChildren
   StarsRoute: typeof StarsRoute
-  TestRoute: typeof TestRoute
   UploadRoute: typeof UploadRoute
   OwnerSlugRoute: typeof OwnerSlugRoute
   CliAuthRoute: typeof CliAuthRoute
@@ -464,13 +451,6 @@ declare module '@tanstack/react-router' {
       path: '/upload'
       fullPath: '/upload'
       preLoaderRoute: typeof UploadRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/test': {
-      id: '/test'
-      path: '/test'
-      fullPath: '/test'
-      preLoaderRoute: typeof TestRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/stars': {
@@ -741,7 +721,6 @@ const rootRouteChildren: RootRouteChildren = {
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRouteWithChildren,
   StarsRoute: StarsRoute,
-  TestRoute: TestRoute,
   UploadRoute: UploadRoute,
   OwnerSlugRoute: OwnerSlugRoute,
   CliAuthRoute: CliAuthRoute,
