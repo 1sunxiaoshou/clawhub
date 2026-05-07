@@ -113,6 +113,58 @@ describe("httpApiV1 handlers", () => {
     expect(runAction).not.toHaveBeenCalled();
   });
 
+  it("skills detail allows api-token access to restricted skills", async () => {
+    vi.mocked(getOptionalApiTokenUserId).mockResolvedValue("users:viewer" as never);
+    let publicSlugCalls = 0;
+    const restrictedSkill = {
+      _id: "skills:restricted",
+      slug: "restricted",
+      displayName: "Restricted",
+      summary: "Private enough",
+      ownerUserId: "users:owner",
+      latestVersionId: "skillVersions:1",
+      tags: { latest: "skillVersions:1" },
+      stats: { downloads: 0, stars: 0, versions: 1, comments: 0 },
+      createdAt: 1,
+      updatedAt: 2,
+      visibility: "restricted",
+      moderationStatus: "active",
+    };
+    const version = {
+      _id: "skillVersions:1",
+      skillId: "skills:restricted",
+      version: "1.0.0",
+      createdAt: 1,
+      changelog: "init",
+      files: [],
+      parsed: { frontmatter: {}, license: "MIT-0" },
+    };
+    const ctx = makeCtx({
+      runQuery: vi.fn(async (_query: unknown, args: Record<string, unknown>) => {
+        if (hasSlugArgs(args)) {
+          publicSlugCalls += 1;
+          return publicSlugCalls === 1 ? null : restrictedSkill;
+        }
+        if (args.skillId === "skills:restricted" && args.userId === "users:viewer") return true;
+        if (args.versionId === "skillVersions:1") return version;
+        if (Array.isArray(args.versionIds)) return [version];
+        return null;
+      }),
+    });
+
+    const response = await __handlers.skillsGetRouterV1Handler(
+      ctx,
+      new Request("https://example.com/api/v1/skills/restricted", {
+        headers: { Authorization: "Bearer test" },
+      }),
+    );
+
+    if (response.status !== 200) throw new Error(await response.text());
+    const body = await response.json();
+    expect(body.skill.slug).toBe("restricted");
+    expect(body.latestVersion.version).toBe("1.0.0");
+  });
+
   it("users/restore forbids non-admin api tokens", async () => {
     const runQuery = vi.fn();
     const runAction = vi.fn();
@@ -410,9 +462,9 @@ describe("httpApiV1 handlers", () => {
 
   it("lists skills with resolved tags using batch query", async () => {
     const runQuery = vi.fn(async (_query: unknown, args: Record<string, unknown>) => {
-      if ("cursor" in args || "limit" in args) {
+      if ("cursor" in args || "numItems" in args) {
         return {
-          items: [
+          page: [
             {
               skill: {
                 _id: "skills:1",
@@ -448,9 +500,9 @@ describe("httpApiV1 handlers", () => {
 
   it("batches tag resolution across multiple skills into single query", async () => {
     const runQuery = vi.fn(async (_query: unknown, args: Record<string, unknown>) => {
-      if ("cursor" in args || "limit" in args) {
+      if ("cursor" in args || "numItems" in args) {
         return {
-          items: [
+          page: [
             {
               skill: {
                 _id: "skills:1",
@@ -512,6 +564,80 @@ describe("httpApiV1 handlers", () => {
       ([, args]) => args && "versionIds" in (args as Record<string, unknown>),
     );
     expect(batchCalls).toHaveLength(1);
+  });
+
+  it("lists token-accessible skills for api token users", async () => {
+    vi.mocked(requireApiTokenUser).mockResolvedValueOnce({
+      userId: "users:viewer",
+      user: { _id: "users:viewer", handle: "viewer", role: "user" },
+    } as never);
+    const runQuery = vi.fn(async (_query: unknown, args: Record<string, unknown>) => {
+      if ("userId" in args && "limit" in args) {
+        expect(args).toMatchObject({ userId: "users:viewer", limit: 1 });
+        return [
+          {
+            _id: "skills:restricted",
+            slug: "org-skill",
+            displayName: "Org Skill",
+            summary: "restricted",
+            visibility: "restricted",
+            ownerUserId: "users:owner",
+            ownerPublisherId: "publishers:org",
+            tags: { latest: "versions:restricted" },
+            stats: { downloads: 1, stars: 0, versions: 1, comments: 0 },
+            createdAt: 1,
+            updatedAt: 2,
+            latestVersionId: "versions:restricted",
+            moderationStatus: "active",
+            isSuspicious: false,
+          },
+        ];
+      }
+      if ("versionIds" in args) {
+        return [{ _id: "versions:restricted", version: "1.0.0", softDeletedAt: undefined }];
+      }
+      if ("versionId" in args) {
+        return {
+          _id: "versions:restricted",
+          version: "1.0.0",
+          createdAt: 3,
+          changelog: "c",
+          files: [],
+          parsed: { license: "MIT-0", clawdis: { os: ["linux"] } },
+        };
+      }
+      return null;
+    });
+    const runMutation = vi.fn().mockResolvedValue(okRate());
+    const response = await __handlers.listSkillsV1Handler(
+      makeCtx({ runQuery, runMutation }),
+      new Request("https://example.com/api/v1/skills?scope=accessible&limit=1", {
+        headers: { Authorization: "Bearer clh_test" },
+      }),
+    );
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.items).toHaveLength(1);
+    expect(json.items[0]).toMatchObject({
+      slug: "org-skill",
+      visibility: "restricted",
+      ownerPublisherId: "publishers:org",
+      tags: { latest: "1.0.0" },
+      latestVersion: { version: "1.0.0", license: "MIT-0" },
+      metadata: { os: ["linux"], systems: null },
+      moderation: { status: "active", reason: null, isSuspicious: false },
+    });
+    expect(json.nextCursor).toBeNull();
+  });
+
+  it("rejects accessible skill list without api token auth", async () => {
+    vi.mocked(requireApiTokenUser).mockRejectedValueOnce(new Error("Unauthorized"));
+    const runMutation = vi.fn().mockResolvedValue(okRate());
+    const response = await __handlers.listSkillsV1Handler(
+      makeCtx({ runMutation }),
+      new Request("https://example.com/api/v1/skills?scope=accessible"),
+    );
+    expect(response.status).toBe(401);
   });
 
   it("lists souls with resolved tags using batch query", async () => {
@@ -705,16 +831,16 @@ describe("httpApiV1 handlers", () => {
   it("lists skills supports sort aliases", async () => {
     const checks: Array<[string, string]> = [
       ["rating", "stars"],
-      ["installs", "installsCurrent"],
-      ["installs-all-time", "installsAllTime"],
-      ["trending", "trending"],
+      ["installs", "installs"],
+      ["installs-all-time", "installs"],
+      ["trending", "installs"],
     ];
 
     for (const [input, expected] of checks) {
       const runQuery = vi.fn(async (_query: unknown, args: Record<string, unknown>) => {
-        if ("sort" in args || "cursor" in args || "limit" in args) {
+        if ("sort" in args || "cursor" in args || "numItems" in args) {
           expect(args.sort).toBe(expected);
-          return { items: [], nextCursor: null };
+          return { page: [], nextCursor: null };
         }
         return null;
       });
@@ -729,9 +855,9 @@ describe("httpApiV1 handlers", () => {
 
   it("lists skills forwards nonSuspiciousOnly", async () => {
     const runQuery = vi.fn(async (_query: unknown, args: Record<string, unknown>) => {
-      if ("sort" in args || "cursor" in args || "limit" in args) {
+      if ("sort" in args || "cursor" in args || "numItems" in args) {
         expect(args.nonSuspiciousOnly).toBe(true);
-        return { items: [], nextCursor: null };
+        return { page: [], nextCursor: null };
       }
       return null;
     });
@@ -745,9 +871,9 @@ describe("httpApiV1 handlers", () => {
 
   it("lists skills forwards legacy nonSuspicious alias", async () => {
     const runQuery = vi.fn(async (_query: unknown, args: Record<string, unknown>) => {
-      if ("sort" in args || "cursor" in args || "limit" in args) {
+      if ("sort" in args || "cursor" in args || "numItems" in args) {
         expect(args.nonSuspiciousOnly).toBe(true);
-        return { items: [], nextCursor: null };
+        return { page: [], nextCursor: null };
       }
       return null;
     });
@@ -761,9 +887,9 @@ describe("httpApiV1 handlers", () => {
 
   it("lists skills prefers canonical nonSuspiciousOnly over legacy alias", async () => {
     const runQuery = vi.fn(async (_query: unknown, args: Record<string, unknown>) => {
-      if ("sort" in args || "cursor" in args || "limit" in args) {
+      if ("sort" in args || "cursor" in args || "numItems" in args) {
         expect(args.nonSuspiciousOnly).toBeUndefined();
-        return { items: [], nextCursor: null };
+        return { page: [], nextCursor: null };
       }
       return null;
     });
@@ -1947,18 +2073,51 @@ describe("httpApiV1 handlers", () => {
   it("whoami returns user payload", async () => {
     vi.mocked(requireApiTokenUser).mockResolvedValueOnce({
       userId: "users:1",
-      user: { handle: "p", displayName: "Peter", image: null },
+      user: { _id: "users:1", handle: "p", role: "admin", displayName: "Peter", image: null },
     } as never);
+    const runQuery = vi.fn(async (_query: unknown, args: Record<string, unknown>) => {
+      if ("userId" in args) {
+        return [
+          {
+            publisher: {
+              _id: "publishers:1",
+              handle: "team",
+              displayName: "Team",
+              image: null,
+              kind: "org",
+            },
+            role: "owner",
+          },
+        ];
+      }
+      return null;
+    });
     const runMutation = vi.fn().mockResolvedValue(okRate());
     const response = await __handlers.whoamiV1Handler(
-      makeCtx({ runMutation }),
+      makeCtx({ runQuery, runMutation }),
       new Request("https://example.com/api/v1/whoami", {
         headers: { Authorization: "Bearer clh_test" },
       }),
     );
     expect(response.status).toBe(200);
     const json = await response.json();
-    expect(json.user.handle).toBe("p");
+    expect(json.user).toMatchObject({
+      id: "users:1",
+      handle: "p",
+      role: "admin",
+      displayName: "Peter",
+      image: null,
+    });
+    expect(json.publishers).toEqual([
+      {
+        id: "publishers:1",
+        handle: "team",
+        displayName: "Team",
+        image: null,
+        kind: "org",
+        role: "owner",
+      },
+    ]);
   });
 
   it("delete and undelete require auth", async () => {

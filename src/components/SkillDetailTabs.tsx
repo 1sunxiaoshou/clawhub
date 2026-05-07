@@ -4,6 +4,7 @@ import { SkillVersionsPanel } from "./SkillVersionsPanel";
 import { Card } from "./ui/card";
 import { Skeleton } from "./ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { useI18n } from "../lib/i18n";
 
 const SkillDiffCard = lazy(() =>
   import("./SkillDiffCard").then((module) => ({ default: module.SkillDiffCard })),
@@ -46,11 +47,12 @@ export function SkillDetailTabs({
   suppressVersionScanResults,
   scanResultsSuppressedMessage,
 }: SkillDetailTabsProps) {
+  const { t } = useI18n();
   return (
     <Card>
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)}>
         <TabsList>
-          <TabsTrigger value="files">Files</TabsTrigger>
+          <TabsTrigger value="files">{t("skillDetail.tabs.files")}</TabsTrigger>
           <TabsTrigger
             value="compare"
             onMouseEnter={() => {
@@ -62,9 +64,9 @@ export function SkillDetailTabs({
               void import("./SkillDiffCard");
             }}
           >
-            Compare
+            {t("skillDetail.tabs.compare")}
           </TabsTrigger>
-          <TabsTrigger value="versions">Versions</TabsTrigger>
+          <TabsTrigger value="versions">{t("skillDetail.tabs.versions")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="files">

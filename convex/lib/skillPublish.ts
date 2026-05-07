@@ -56,11 +56,11 @@ export type PublishVersionArgs = {
   tags?: string[];
   forkOf?: { slug: string; version?: string };
   source?: {
-    kind: "github";
+    kind: "github" | "clawhub";
     url: string;
     repo: string;
     ref: string;
-    commit: string;
+    commit?: string;
     path: string;
     importedAt: number;
   };
@@ -370,15 +370,18 @@ function mergeSourceIntoMetadata(
       : {};
 
   if (source) {
-    base.source = {
+    const sourceMetadata: Record<string, unknown> = {
       kind: source.kind,
       url: source.url,
       repo: source.repo,
       ref: source.ref,
-      commit: source.commit,
       path: source.path,
       importedAt: source.importedAt,
     };
+    if (source.commit) {
+      sourceMetadata.commit = source.commit;
+    }
+    base.source = sourceMetadata;
   }
 
   if (qualityAssessment) {

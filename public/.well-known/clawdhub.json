@@ -1,6 +1,6 @@
 {
-  "apiBase": "https://clawhub.ai",
-  "authBase": "https://clawhub.ai",
+  "apiBase": "http://124.71.100.127:4011",
+  "authBase": "http://localhost:3000",
   "minCliVersion": "0.1.0",
-  "registry": "https://clawhub.ai"
+  "registry": "http://124.71.100.127:4011"
 }

@@ -2,11 +2,12 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { useRef } from "react";
 import { api } from "../../../convex/_generated/api";
+import { useI18n } from "../../lib/i18n";
 import { SKILL_CAPABILITY_TAGS } from "../../../convex/lib/skillCapabilityTags";
-import { Container } from "../../components/layout/Container";
-import { parseSort } from "./-params";
+import { SKILL_CATEGORIES, type SkillCategory } from "../../lib/categories";
 import { SkillsResults } from "./-SkillsResults";
 import { SkillsToolbar } from "./-SkillsToolbar";
+import { parseSort } from "./-params";
 import { useSkillsBrowseModel, type SkillsSearchState } from "./-useSkillsBrowseModel";
 
 const SKILL_CAPABILITY_TAG_SET = new Set<string>(SKILL_CAPABILITY_TAGS);
@@ -61,8 +62,9 @@ export function SkillsIndex() {
   const search = Route.useSearch();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const totalSkills = useQuery(api.skills.countPublicSkills);
+  const { t, locale } = useI18n();
   const totalSkillsText =
-    typeof totalSkills === "number" ? totalSkills.toLocaleString("en-US") : null;
+    typeof totalSkills === "number" ? totalSkills.toLocaleString(locale) : null;
 
   const model = useSkillsBrowseModel({
     navigate,
@@ -70,74 +72,115 @@ export function SkillsIndex() {
     searchInputRef,
   });
 
+  const handleCategoryChange = (cat: SkillCategory | undefined) => {
+    if (!cat) {
+      model.onQueryChange("");
+    } else if (cat.slug === "other") {
+      model.onQueryChange("__other__");
+    } else if (cat.keywords[0]) {
+      model.onQueryChange(cat.keywords[0]);
+    } else {
+      model.onQueryChange("");
+    }
+  };
+
+  const activeCategory =
+    model.query === "__other__"
+      ? "other"
+      : !model.query
+        ? undefined
+        : SKILL_CATEGORIES.find((c) =>
+            c.keywords.some((k) => k === model.query.trim().toLowerCase()),
+          )?.slug;
+
   return (
-    <main className="py-10">
-      <Container size="wide">
-        <div className="flex flex-col gap-6">
-          {/* Header */}
-          <header>
-            <h1 className="font-display text-2xl font-bold text-[color:var(--ink)]">
-              Skills
-              <span className="ml-2 text-lg font-normal text-[color:var(--ink-soft)] opacity-70">
-                ({model.hasQuery || model.highlightedOnly || model.nonSuspiciousOnly
-                  ? model.sorted.length.toLocaleString("en-US")
-                  : totalSkillsText ?? "…"})
-              </span>
-            </h1>
-            <p className="mt-1 text-sm text-[color:var(--ink-soft)]">
-              {model.isLoadingSkills
-                ? "Loading skills..."
-                : `Browse the skill library${model.activeFilters.length ? ` (${model.activeFilters.join(", ")})` : ""}.`}
-            </p>
-          </header>
+    <main className="flex-1 flex flex-col">
+      <div className="min-h-screen pb-[53px]">
+        <div className="section-container-wide">
+          {/* Hero Section */}
+          <div className="mb-[16px]">
+            <div className="flex-1 min-w-0">
+              <div className="animate-glass-reveal">
+                <h1 className="text-[48px] font-semibold tracking-tight text-[color:var(--ink)] mb-[10px] md:text-[56px]">
+                  {t("skills.title")}
+                </h1>
+              </div>
 
-          {/* Toolbar */}
-          <SkillsToolbar
-            searchInputRef={searchInputRef}
-            query={model.query}
-            hasQuery={model.hasQuery}
-            sort={model.sort}
-            dir={model.dir}
-            view={model.view}
-            highlightedOnly={model.highlightedOnly}
-            nonSuspiciousOnly={model.nonSuspiciousOnly}
-            capabilityTag={model.capabilityTag}
-            onQueryChange={model.onQueryChange}
-            onToggleHighlighted={model.onToggleHighlighted}
-            onToggleNonSuspicious={model.onToggleNonSuspicious}
-            onCapabilityTagChange={model.onCapabilityTagChange}
-            onSortChange={model.onSortChange}
-            onToggleDir={model.onToggleDir}
-            onToggleView={model.onToggleView}
-          />
+              {/* Category Pills */}
+              <div className="animate-glass-reveal delay-1 overflow-x-auto scrollbar-none mt-[8px]">
+                <div className="flex flex-col gap-2 pb-1 md:flex-row md:items-center md:justify-between">
+                  <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
+                    <button
+                      type="button"
+                      onClick={() => handleCategoryChange(undefined)}
+                      className={`pill whitespace-nowrap ${!activeCategory ? "pill-active" : "pill-inactive"}`}
+                    >
+                      {t("skills.allCategories")}
+                    </button>
+                    {SKILL_CATEGORIES.map((cat) => (
+                      <button
+                        key={cat.slug}
+                        type="button"
+                        onClick={() => handleCategoryChange(cat)}
+                        className={`pill whitespace-nowrap ${activeCategory === cat.slug ? "pill-active" : "pill-inactive"}`}
+                      >
+                        {t(`skills.categories.${cat.slug}`) || cat.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="shrink-0 text-sm font-medium text-[color:var(--ink-soft)] md:text-right">
+                    {t("skills.collectedCount", { count: totalSkillsText ?? "..." })}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
 
-          {/* Results count */}
-          {model.sorted.length > 0 && (
-            <p className="text-xs font-medium text-[color:var(--ink-soft)]">
-              {model.sorted.length}
-              {!model.hasQuery && totalSkillsText ? ` of ${totalSkillsText}` : ""} skills
-              {model.hasQuery ? ` matching "${model.query}"` : ""}
-              {model.highlightedOnly || model.nonSuspiciousOnly || model.capabilityTag
-                ? ` (filtered)`
-                : ""}
-            </p>
-          )}
+          <div className="animate-glass-reveal delay-2">
+            {/* Toolbar */}
+            <div className="mb-[18px]">
+              <SkillsToolbar
+                searchInputRef={searchInputRef}
+                query={model.query}
+                hasQuery={model.hasQuery}
+                sort={model.sort}
+                view={model.view}
+                highlightedOnly={model.highlightedOnly}
+                nonSuspiciousOnly={model.nonSuspiciousOnly}
+                onQueryChange={model.onQueryChange}
+                onToggleHighlighted={model.onToggleHighlighted}
+                onToggleNonSuspicious={model.onToggleNonSuspicious}
+                onSortChange={model.onSortChange}
+                onToggleView={model.onToggleView}
+              />
+            </div>
 
-          {/* Results */}
-          <SkillsResults
-            isLoadingSkills={model.isLoadingSkills}
-            sorted={model.sorted}
-            view={model.view}
-            listDoneLoading={!model.isLoadingSkills && !model.canLoadMore && !model.isLoadingMore}
-            hasQuery={model.hasQuery}
-            canLoadMore={model.canLoadMore}
-            isLoadingMore={model.isLoadingMore}
-            canAutoLoad={model.canAutoLoad}
-            loadMoreRef={model.loadMoreRef}
-            loadMore={model.loadMore}
-          />
+            {/* Results count info */}
+            {model.sorted.length > 0 && model.hasQuery && (
+              <p className="mb-4 text-xs font-medium text-[color:var(--ink-soft)]">
+                {model.sorted.length.toLocaleString(locale)}
+                {totalSkillsText ? ` ${t("skills.of")} ${totalSkillsText}` : ""}{" "}
+                {t("skills.count", { count: model.sorted.length })}
+                {` ${t("skills.matching")} "${model.query}"`}
+              </p>
+            )}
+
+            {/* Results */}
+            <SkillsResults
+              isLoadingSkills={model.isLoadingSkills}
+              sorted={model.sorted}
+              view={model.view}
+              listDoneLoading={!model.isLoadingSkills && !model.canLoadMore && !model.isLoadingMore}
+              hasQuery={model.hasQuery}
+              canLoadMore={model.canLoadMore}
+              isLoadingMore={model.isLoadingMore}
+              canAutoLoad={model.canAutoLoad}
+              loadMoreRef={model.loadMoreRef}
+              loadMore={model.loadMore}
+            />
+          </div>
         </div>
-      </Container>
+      </div>
     </main>
   );
 }

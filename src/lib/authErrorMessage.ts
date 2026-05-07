@@ -18,6 +18,10 @@ export function normalizeAuthErrorMessage(message: string | null | undefined, fa
     return DELETED_SIGN_IN_MESSAGE;
   }
   if (lowered.includes("account banned")) return BANNED_SIGN_IN_MESSAGE;
+  if (lowered.includes("invalidsecret")) return "Current password is incorrect.";
+  if (lowered.includes("password must be at least 8 characters")) {
+    return "Password must be at least 8 characters.";
+  }
 
   return normalized;
 }

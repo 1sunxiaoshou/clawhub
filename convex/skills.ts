@@ -44,14 +44,15 @@ import {
 } from "./lib/moderationReasonCodes";
 import {
   type HydratableSkill,
-  type PublicPublisher,
   toPublicPublisher,
   toPublicSkill,
   toPublicUser,
 } from "./lib/public";
 import {
   ensurePersonalPublisherForUser,
+  getActiveUserByHandleOrPersonalPublisher,
   getOwnerPublisher,
+  getPublisherByHandle,
   requirePublisherRole,
 } from "./lib/publishers";
 import {
@@ -67,6 +68,23 @@ import {
   reserveSlugForHardDeleteFinalize,
   upsertReservedSlugForRightfulOwner,
 } from "./lib/reservedSlugs";
+import {
+  canManageSkillAccess,
+  canListSkillPublicly,
+  canReadSkill,
+  canReadSkillFile,
+  canReadSkillVersion,
+  getSkillVisibility,
+  hasSkillAccessGrant,
+} from "./lib/skillAccess";
+import {
+  decodeSkillCatalogCursor,
+  encodeSkillCatalogCursor,
+  type PublicSkillCatalogItem,
+  scoreSkillCatalogResult,
+  skillCatalogMatchesFilters,
+  toPublicSkillCatalogItem,
+} from "./lib/skillCatalog";
 import { SKILL_CAPABILITY_TAGS } from "./lib/skillCapabilityTags";
 import {
   fetchText,
@@ -74,15 +92,25 @@ import {
   publishVersionForUser,
   queueHighlightedWebhook,
 } from "./lib/skillPublish";
-import { runStaticPublishScan } from "./lib/staticPublishScan";
 import { getFrontmatterValue, hashSkillFiles } from "./lib/skills";
 import { computeIsSuspicious, isSkillSuspicious } from "./lib/skillSafety";
+import {
+  buildPublicSkillEntries,
+  buildPublicSkillEntryFromDigest,
+  filterSkillsByActiveOwner,
+  type PublicSkillEntry,
+} from "./lib/skillPublicEntries";
 import {
   digestToHydratableSkill,
   digestToOwnerInfo,
   extractDigestFields,
   upsertSkillSearchDigest,
 } from "./lib/skillSearchDigest";
+import {
+  toPublicSkillListVersionFromSummary,
+  toPublicSkillVersion,
+} from "./lib/skillVersions";
+import { runStaticPublishScan } from "./lib/staticPublishScan";
 import schema from "./schema";
 
 export { publishVersionForUser } from "./lib/skillPublish";
@@ -118,7 +146,6 @@ const MAX_MANUAL_OVERRIDE_NOTE_LENGTH = 1200;
 const DEFAULT_STAFF_AUDIT_LOG_LIMIT = 10;
 const MAX_STAFF_AUDIT_LOG_LIMIT = 50;
 const USER_MODERATION_REASON = "user.moderation";
-const SKILL_CATALOG_CURSOR_PREFIX = "skillcat:";
 const SKILL_CAPABILITY_TAG_SET = new Set<string>(SKILL_CAPABILITY_TAGS);
 
 function buildStructuredModerationPatch(params: {
@@ -459,20 +486,14 @@ async function syncSkillModerationFromLatestVersion(
   await adjustGlobalPublicCountForSkillChange(ctx, skill, nextSkill);
 }
 
-function buildConflictingSkillUrl(
-  skill: Doc<"skills">,
-  owner: SkillOwnerRef,
-) {
+function buildConflictingSkillUrl(skill: Doc<"skills">, owner: SkillOwnerRef) {
   if (!owner || owner.deletedAt || owner.deactivatedAt || !isPublicSkillDoc(skill)) return null;
   const ownerParam = owner.handle?.trim() || String(owner._id);
   if (!ownerParam) return null;
   return `/${encodeURIComponent(ownerParam)}/${encodeURIComponent(skill.slug)}`;
 }
 
-function buildSlugTakenErrorMessage(
-  skill: Doc<"skills">,
-  owner: SkillOwnerRef,
-) {
+function buildSlugTakenErrorMessage(skill: Doc<"skills">, owner: SkillOwnerRef) {
   if (!owner || owner.deletedAt || owner.deactivatedAt) {
     return (
       "This slug is locked to a deleted or banned account. " +
@@ -485,10 +506,7 @@ function buildSlugTakenErrorMessage(
   return `${base} Existing skill: ${url}`;
 }
 
-function buildAliasTakenErrorMessage(
-  skill: Doc<"skills">,
-  owner: SkillOwnerRef,
-) {
+function buildAliasTakenErrorMessage(skill: Doc<"skills">, owner: SkillOwnerRef) {
   const base = "Slug redirects to an existing skill. Choose a different slug.";
   const url = buildConflictingSkillUrl(skill, owner);
   if (!url) return base;
@@ -1015,72 +1033,8 @@ async function hardDeleteSkillStep(
   }
 }
 
-type PublicSkillEntry = {
-  skill: NonNullable<ReturnType<typeof toPublicSkill>>;
-  latestVersion: PublicSkillListVersion | null;
-  ownerHandle: string | null;
-  owner: PublicPublisher | null;
-};
-
 type StaffSkillAuditLogEntry = Doc<"auditLogs"> & {
   actor: ReturnType<typeof toPublicUser> | null;
-};
-
-type PublicSkillListVersion = Pick<
-  Doc<"skillVersions">,
-  "_id" | "_creationTime" | "version" | "createdAt" | "changelog" | "changelogSource"
-> & {
-  parsed?: PublicSkillVersionParsed;
-};
-
-type PublicSkillVersionParsed = {
-  license?: typeof PLATFORM_SKILL_LICENSE;
-  clawdis?: {
-    os?: string[];
-    nix?: {
-      plugin?: boolean;
-      systems?: string[];
-    };
-  };
-};
-
-type PublicSkillVersion = {
-  _id: Id<"skillVersions">;
-  _creationTime?: number;
-  skillId?: Id<"skills">;
-  version: string;
-  fingerprint?: string;
-  changelog?: string;
-  changelogSource?: Doc<"skillVersions">["changelogSource"];
-  files: Array<{
-    path: string;
-    size: number;
-    sha256: string;
-    contentType?: string;
-  }>;
-  parsed?: PublicSkillVersionParsed;
-  createdBy?: Id<"users">;
-  createdAt?: number;
-  softDeletedAt?: number;
-  capabilityTags?: string[];
-  sha256hash?: string;
-  vtAnalysis?: Doc<"skillVersions">["vtAnalysis"];
-  llmAnalysis?: Doc<"skillVersions">["llmAnalysis"];
-  staticScan?: {
-    status: NonNullable<Doc<"skillVersions">["staticScan"]>["status"];
-    reasonCodes: NonNullable<Doc<"skillVersions">["staticScan"]>["reasonCodes"];
-    findings: Array<{
-      code: string;
-      severity: "info" | "warn" | "critical";
-      file: string;
-      line: number;
-      message: string;
-      evidence: string;
-    }>;
-    summary: NonNullable<Doc<"skillVersions">["staticScan"]>["summary"];
-    engineVersion: NonNullable<Doc<"skillVersions">["staticScan"]>["engineVersion"];
-    checkedAt: NonNullable<Doc<"skillVersions">["staticScan"]>["checkedAt"];
-  };
 };
 
 type ManagementSkillEntry = {
@@ -1090,196 +1044,6 @@ type ManagementSkillEntry = {
 };
 
 type BadgeKind = Doc<"skillBadges">["kind"];
-
-async function buildPublicSkillEntries(
-  ctx: QueryCtx,
-  skills: HydratableSkill[],
-  opts?: {
-    includeVersion?: boolean;
-    preResolvedOwners?: Map<
-      Id<"skills">,
-      { ownerHandle: string | null; owner: PublicPublisher | null }
-    >;
-  },
-) {
-  const includeVersion = opts?.includeVersion ?? true;
-  const ownerInfoCache = new Map<
-    string,
-    Promise<{
-      ownerHandle: string | null;
-      owner: PublicPublisher | null;
-    }>
-  >();
-
-  const getOwnerInfo = (
-    skillId: Id<"skills">,
-    ownerUserId: Id<"users">,
-    ownerPublisherId?: Id<"publishers"> | null,
-  ) => {
-    // Use pre-resolved owner from digest when available to avoid adding the
-    // users table to the reactive read set (which causes thundering-herd
-    // invalidation on every user-doc write).
-    const preResolved = opts?.preResolvedOwners?.get(skillId);
-    if (preResolved?.owner) return Promise.resolve(preResolved);
-
-    const cacheKey = String(ownerPublisherId ?? ownerUserId);
-    const cached = ownerInfoCache.get(cacheKey);
-    if (cached) return cached;
-    const ownerPromise = getOwnerPublisher(ctx, {
-      ownerPublisherId,
-      ownerUserId,
-    }).then((ownerDoc) => {
-      const publicOwner = toPublicPublisher(ownerDoc);
-      if (!publicOwner) {
-        return { ownerHandle: null, owner: null };
-      }
-      return {
-        ownerHandle: publicOwner.handle ?? String(publicOwner._id),
-        owner: publicOwner,
-      };
-    });
-    ownerInfoCache.set(cacheKey, ownerPromise);
-    return ownerPromise;
-  };
-
-  const entries = await Promise.all(
-    skills.map(async (skill) => {
-      // Use denormalized summary when available to avoid reading the full ~6KB version doc.
-      const summary = skill.latestVersionSummary;
-      const hasSummary = includeVersion && summary;
-      const [latestVersionDoc, ownerInfo] = await Promise.all([
-        includeVersion && !hasSummary && skill.latestVersionId
-          ? ctx.db.get(skill.latestVersionId)
-          : null,
-        getOwnerInfo(skill._id, skill.ownerUserId, skill.ownerPublisherId),
-      ]);
-      const publicSkill = toPublicSkill(skill);
-      if (!publicSkill || !ownerInfo.owner) return null;
-      const latestVersion = hasSummary
-        ? toPublicSkillListVersionFromSummary(summary!, skill.latestVersionId)
-        : toPublicSkillListVersion(latestVersionDoc);
-      return {
-        skill: publicSkill,
-        latestVersion,
-        ownerHandle: ownerInfo.ownerHandle,
-        owner: ownerInfo.owner,
-      };
-    }),
-  );
-
-  return entries.filter(Boolean) as PublicSkillEntry[];
-}
-
-async function filterSkillsByActiveOwner(ctx: Pick<QueryCtx, "db">, skills: Doc<"skills">[]) {
-  const ownerCache = new Map<Id<"users">, Promise<Doc<"users"> | null>>();
-
-  const getOwner = (ownerUserId: Id<"users">) => {
-    const cached = ownerCache.get(ownerUserId);
-    if (cached) return cached;
-    const ownerPromise = ctx.db.get(ownerUserId);
-    ownerCache.set(ownerUserId, ownerPromise);
-    return ownerPromise;
-  };
-
-  const filtered = await Promise.all(
-    skills.map(async (skill) => {
-      const owner = await getOwner(skill.ownerUserId);
-      if (!owner || owner.deletedAt || owner.deactivatedAt) return null;
-      return skill;
-    }),
-  );
-
-  return filtered.filter((skill): skill is Doc<"skills"> => skill !== null);
-}
-
-function toPublicSkillListVersion(
-  version: Doc<"skillVersions"> | null,
-): PublicSkillListVersion | null {
-  if (!version) return null;
-  return {
-    _id: version._id,
-    _creationTime: version._creationTime,
-    version: version.version,
-    createdAt: version.createdAt,
-    changelog: version.changelog,
-    changelogSource: version.changelogSource,
-    parsed:
-      version.parsed?.clawdis || version.parsed?.license
-        ? {
-            ...(version.parsed?.license ? { license: version.parsed.license } : {}),
-            ...(version.parsed?.clawdis ? { clawdis: version.parsed.clawdis } : {}),
-          }
-        : undefined,
-  };
-}
-
-function toPublicSkillVersion(
-  version: Doc<"skillVersions"> | null | undefined,
-): PublicSkillVersion | null {
-  if (!version) return null;
-  return {
-    _id: version._id,
-    _creationTime: version._creationTime,
-    skillId: version.skillId,
-    version: version.version,
-    fingerprint: version.fingerprint,
-    changelog: version.changelog,
-    changelogSource: version.changelogSource,
-    files: (version.files ?? []).map((file) => ({
-      path: file.path,
-      size: file.size,
-      sha256: file.sha256,
-      contentType: file.contentType,
-    })),
-    parsed: version.parsed
-      ? {
-          license: version.parsed.license,
-          clawdis: version.parsed.clawdis,
-        }
-      : undefined,
-    createdBy: version.createdBy,
-    createdAt: version.createdAt,
-    softDeletedAt: version.softDeletedAt,
-    capabilityTags: version.capabilityTags,
-    sha256hash: version.sha256hash,
-    vtAnalysis: version.vtAnalysis,
-    llmAnalysis: version.llmAnalysis,
-    staticScan: version.staticScan
-      ? {
-          status: version.staticScan.status,
-          reasonCodes: version.staticScan.reasonCodes,
-          findings: (version.staticScan.findings ?? []).map((finding) => ({
-            code: finding.code,
-            severity: finding.severity,
-            file: finding.file,
-            line: finding.line,
-            message: finding.message,
-            evidence: "",
-          })),
-          summary: version.staticScan.summary,
-          engineVersion: version.staticScan.engineVersion,
-          checkedAt: version.staticScan.checkedAt,
-        }
-      : undefined,
-  };
-}
-
-function toPublicSkillListVersionFromSummary(
-  summary: NonNullable<Doc<"skills">["latestVersionSummary"]>,
-  latestVersionId: Id<"skillVersions"> | undefined,
-): PublicSkillListVersion | null {
-  if (!latestVersionId) return null;
-  return {
-    _id: latestVersionId,
-    // Approximates _creationTime; both are set to `now` in the same transaction
-    _creationTime: summary.createdAt,
-    version: summary.version,
-    createdAt: summary.createdAt,
-    changelog: summary.changelog,
-    changelogSource: summary.changelogSource,
-    parsed: summary.clawdis ? { clawdis: summary.clawdis } : undefined,
-  };
-}
 
 async function buildManagementSkillEntries(ctx: QueryCtx, skills: Doc<"skills">[]) {
   const ownerCache = new Map<Id<"users">, Promise<Doc<"users"> | null>>();
@@ -1407,6 +1171,7 @@ export const getBySlug = query({
             )
             .unique()
         : null;
+    const actor = userId ? await ctx.db.get(userId) : null;
     const isOwner = Boolean(userId && (userId === skill.ownerUserId || membership));
 
     const latestVersion = toPublicSkillVersion(
@@ -1446,7 +1211,8 @@ export const getBySlug = query({
 
     // Non-owners can see malware-blocked skills (transparency), but not other hidden states
     // Owners can see all their moderated skills
-    if (!publicSkill && !isOwner && !isMalwareBlocked) return null;
+    const canRead = await canReadSkill(ctx, skill, actor);
+    if (!canRead && !isMalwareBlocked) return null;
 
     // For owners viewing their moderated skill, construct the response manually
     const skillData = publicSkill ?? {
@@ -1456,10 +1222,12 @@ export const getBySlug = query({
       displayName: skill.displayName,
       summary: skill.summary,
       ownerUserId: skill.ownerUserId,
+      ownerPublisherId: skill.ownerPublisherId,
       canonicalSkillId: skill.canonicalSkillId,
       forkOf: skill.forkOf,
       latestVersionId: skill.latestVersionId,
       tags: skill.tags,
+      visibility: skill.visibility,
       badges,
       stats: skill.stats,
       createdAt: skill.createdAt,
@@ -1497,6 +1265,16 @@ export const getBySlug = query({
       owner,
       pendingReview: isOwner && isPendingScan,
       moderationInfo,
+      access: {
+        visibility: getSkillVisibility(skill),
+        granted: Boolean(
+          userId &&
+          !isOwner &&
+          getSkillVisibility(skill) === "restricted" &&
+          (await hasSkillAccessGrant(ctx, { skillId: skill._id, userId })),
+        ),
+        canManage: userId && actor ? await canManageSkillAccess(ctx, skill, actor) : false,
+      },
       forkOf: forkOfSkill
         ? {
             kind: skill.forkOf?.kind ?? "fork",
@@ -2138,6 +1916,7 @@ export const list = query({
                 forkOf: skill.forkOf,
                 latestVersionId: skill.latestVersionId,
                 tags: skill.tags,
+                visibility: skill.visibility,
                 badges,
                 stats: skill.stats,
                 createdAt: skill.createdAt,
@@ -2190,6 +1969,7 @@ export const list = query({
                 forkOf: skill.forkOf,
                 latestVersionId: skill.latestVersionId,
                 tags: skill.tags,
+                visibility: skill.visibility,
                 badges,
                 stats: skill.stats,
                 createdAt: skill.createdAt,
@@ -2335,6 +2115,72 @@ export const listRecentVersions = query({
     }
 
     return results;
+  },
+});
+
+export const listAccessibleForUserInternal = internalQuery({
+  args: {
+    userId: v.id("users"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user || user.deletedAt || user.deactivatedAt) return [];
+
+    const limit = clampInt(args.limit ?? 100, 1, MAX_LIST_BULK_LIMIT);
+    const takeLimit = Math.min(limit * 3, MAX_LIST_TAKE);
+    const byId = new Map<Id<"skills">, Doc<"skills">>();
+
+    const addIfReadable = async (skill: Doc<"skills"> | null) => {
+      if (!skill) return;
+      if (byId.has(skill._id)) return;
+      if (!(await canReadSkill(ctx, skill, user))) return;
+      byId.set(skill._id, skill);
+    };
+
+    const ownedSkills = await ctx.db
+      .query("skills")
+      .withIndex("by_owner", (q) => q.eq("ownerUserId", args.userId))
+      .order("desc")
+      .take(takeLimit);
+    for (const skill of ownedSkills) {
+      await addIfReadable(skill);
+    }
+
+    const memberships = await ctx.db
+      .query("publisherMembers")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const membership of memberships) {
+      const publisherSkills = await ctx.db
+        .query("skills")
+        .withIndex("by_owner_publisher", (q) => q.eq("ownerPublisherId", membership.publisherId))
+        .order("desc")
+        .take(takeLimit);
+      for (const skill of publisherSkills) {
+        await addIfReadable(skill);
+      }
+
+      const publisherGrants = await ctx.db
+        .query("skillAccessGrants")
+        .withIndex("by_subject_publisher", (q) =>
+          q.eq("subjectPublisherId", membership.publisherId),
+        )
+        .take(takeLimit);
+      for (const grant of publisherGrants) {
+        await addIfReadable(await ctx.db.get(grant.skillId));
+      }
+    }
+
+    const userGrants = await ctx.db
+      .query("skillAccessGrants")
+      .withIndex("by_subject_user", (q) => q.eq("subjectUserId", args.userId))
+      .take(takeLimit);
+    for (const grant of userGrants) {
+      await addIfReadable(await ctx.db.get(grant.skillId));
+    }
+
+    return [...byId.values()].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit);
   },
 });
 
@@ -2772,7 +2618,10 @@ export const listPublicPageV4 = query({
     let scanInclusive = isFirstPage;
     let hasMore = false;
     let nextCursor: string | null = null;
-    let remainingRows = Math.max(numItems, Math.min(MAX_FILTERED_PUBLIC_LIST_SCAN_ROWS, numItems * 12));
+    let remainingRows = Math.max(
+      numItems,
+      Math.min(MAX_FILTERED_PUBLIC_LIST_SCAN_ROWS, numItems * 12),
+    );
 
     for (let pageCount = 0; pageCount < MAX_FILTERED_PUBLIC_LIST_SCAN_PAGES; pageCount += 1) {
       if (remainingRows <= 0) break;
@@ -2832,147 +2681,6 @@ export const listPublicPageV4 = query({
     return { page: items, hasMore, nextCursor };
   },
 });
-
-function buildPublicSkillEntryFromDigest(digest: Doc<"skillSearchDigest">): PublicSkillEntry | null {
-  const hydratable = digestToHydratableSkill(digest);
-  const publicSkill = toPublicSkill(hydratable);
-  if (!publicSkill) return null;
-  const ownerInfo = digestToOwnerInfo(digest);
-  if (!ownerInfo?.owner) return null;
-  const latestVersion = digest.latestVersionSummary
-    ? toPublicSkillListVersionFromSummary(digest.latestVersionSummary, digest.latestVersionId)
-    : null;
-  return {
-    skill: publicSkill,
-    latestVersion,
-    ownerHandle: ownerInfo.ownerHandle,
-    owner: ownerInfo.owner,
-  };
-}
-
-type PublicSkillCatalogItem = {
-  name: string;
-  displayName: string;
-  family: "skill";
-  runtimeId: null;
-  channel: "official" | "community";
-  isOfficial: boolean;
-  summary: string | null;
-  ownerHandle: string | null;
-  createdAt: number;
-  updatedAt: number;
-  latestVersion: string | null;
-  capabilityTags: string[];
-  executesCode: false;
-  verificationTier: null;
-};
-
-type SkillCatalogCursorState = {
-  cursor: string | null;
-  offset: number;
-  pageSize: number | null;
-  done: boolean;
-};
-
-function encodeSkillCatalogCursor(state: SkillCatalogCursorState) {
-  if (state.done && state.offset === 0) return "";
-  return `${SKILL_CATALOG_CURSOR_PREFIX}${JSON.stringify(state)}`;
-}
-
-function decodeSkillCatalogCursor(raw: string | null | undefined): SkillCatalogCursorState {
-  if (!raw) return { cursor: null, offset: 0, pageSize: null, done: false };
-  if (!raw.startsWith(SKILL_CATALOG_CURSOR_PREFIX)) {
-    return { cursor: raw, offset: 0, pageSize: null, done: false };
-  }
-  try {
-    const parsed = JSON.parse(
-      raw.slice(SKILL_CATALOG_CURSOR_PREFIX.length),
-    ) as Partial<SkillCatalogCursorState>;
-    return {
-      cursor: typeof parsed.cursor === "string" ? parsed.cursor : null,
-      offset: typeof parsed.offset === "number" && parsed.offset > 0 ? parsed.offset : 0,
-      pageSize: typeof parsed.pageSize === "number" && parsed.pageSize > 0 ? parsed.pageSize : null,
-      done: parsed.done === true,
-    };
-  } catch {
-    return { cursor: null, offset: 0, pageSize: null, done: false };
-  }
-}
-
-function isSkillCatalogOfficial(digest: Doc<"skillSearchDigest">) {
-  return Boolean(digest.badges?.official);
-}
-
-function getSkillCatalogChannel(digest: Doc<"skillSearchDigest">): "official" | "community" {
-  return isSkillCatalogOfficial(digest) ? "official" : "community";
-}
-
-function isVisibleSkillCatalogDigest(digest: Doc<"skillSearchDigest">) {
-  const publicSkill = toPublicSkill(digestToHydratableSkill(digest));
-  if (!publicSkill) return false;
-  const ownerInfo = digestToOwnerInfo(digest);
-  return Boolean(ownerInfo?.owner);
-}
-
-function skillCatalogMatchesFilters(
-  digest: Doc<"skillSearchDigest">,
-  args: {
-    channel?: "official" | "community" | "private";
-    isOfficial?: boolean;
-    executesCode?: boolean;
-    capabilityTag?: string;
-  },
-) {
-  if (!isVisibleSkillCatalogDigest(digest)) return false;
-  if (args.channel === "private") return false;
-  if (args.executesCode === true) return false;
-  const isOfficial = isSkillCatalogOfficial(digest);
-  const channel = getSkillCatalogChannel(digest);
-  if (typeof args.isOfficial === "boolean" && isOfficial !== args.isOfficial) return false;
-  if (args.channel && channel !== args.channel) return false;
-  if (args.capabilityTag && !(digest.capabilityTags ?? []).includes(args.capabilityTag))
-    return false;
-  return true;
-}
-
-function toPublicSkillCatalogItem(digest: Doc<"skillSearchDigest">): PublicSkillCatalogItem {
-  const ownerInfo = digestToOwnerInfo(digest);
-  return {
-    name: digest.slug,
-    displayName: digest.displayName,
-    family: "skill",
-    runtimeId: null,
-    channel: getSkillCatalogChannel(digest),
-    isOfficial: isSkillCatalogOfficial(digest),
-    summary: digest.summary ?? null,
-    ownerHandle: ownerInfo?.ownerHandle ?? null,
-    createdAt: digest.createdAt,
-    updatedAt: digest.updatedAt,
-    latestVersion: digest.latestVersionSummary?.version ?? null,
-    capabilityTags: digest.capabilityTags ?? [],
-    executesCode: false,
-    verificationTier: null,
-  };
-}
-
-function scoreSkillCatalogResult(digest: Doc<"skillSearchDigest">, queryText: string) {
-  const needle = queryText.toLowerCase();
-  const slug = digest.slug.toLowerCase();
-  const display = digest.displayName.toLowerCase();
-  const summary = (digest.summary ?? "").toLowerCase();
-  let score = 0;
-  if (slug === needle) score += 200;
-  else if (slug.startsWith(needle)) score += 120;
-  else if (slug.includes(needle)) score += 80;
-
-  if (display === needle) score += 150;
-  else if (display.startsWith(needle)) score += 70;
-  else if (display.includes(needle)) score += 40;
-
-  if (summary.includes(needle)) score += 20;
-  if (isSkillCatalogOfficial(digest)) score += 5;
-  return score;
-}
 
 function isKnownSkillCapabilityTag(tag: string | undefined) {
   return typeof tag === "string" && SKILL_CAPABILITY_TAG_SET.has(tag);
@@ -3205,10 +2913,8 @@ function filterPublicSkillPage(
   page: HydratableSkill[],
   args: { highlightedOnly?: boolean; nonSuspiciousOnly?: boolean },
 ) {
-  if (!args.nonSuspiciousOnly && !args.highlightedOnly) {
-    return page;
-  }
   return page.filter((skill) => {
+    if (!canListSkillPublicly(skill)) return false;
     if (args.nonSuspiciousOnly && isSkillSuspicious(skill)) return false;
     if (args.highlightedOnly && !isSkillHighlighted(skill)) return false;
     return true;
@@ -3270,6 +2976,8 @@ export const listVersions = query({
     const authUserId = await getAuthUserId(ctx);
     const actor = authUserId ? await ctx.db.get(authUserId) : null;
     const isStaff = actor?.role === "admin" || actor?.role === "moderator";
+    const skill = await ctx.db.get(args.skillId);
+    if (!skill || !(await canReadSkillVersion(ctx, skill, actor))) return [];
     const versions = await ctx.db
       .query("skillVersions")
       .withIndex("by_skill", (q) => q.eq("skillId", args.skillId))
@@ -3289,6 +2997,12 @@ export const listVersionsPage = query({
   },
   handler: async (ctx, args) => {
     const limit = clampInt(args.limit ?? 20, 1, MAX_LIST_LIMIT);
+    const authUserId = await getAuthUserId(ctx);
+    const actor = authUserId ? await ctx.db.get(authUserId) : null;
+    const skill = await ctx.db.get(args.skillId);
+    if (!skill || !(await canReadSkillVersion(ctx, skill, actor))) {
+      return { items: [], nextCursor: null };
+    }
     const { page, isDone, continueCursor } = await ctx.db
       .query("skillVersions")
       .withIndex("by_skill", (q) => q.eq("skillId", args.skillId))
@@ -3303,7 +3017,15 @@ export const listVersionsPage = query({
 
 export const getVersionById = query({
   args: { versionId: v.id("skillVersions") },
-  handler: async (ctx, args) => toPublicSkillVersion(await ctx.db.get(args.versionId)),
+  handler: async (ctx, args) => {
+    const version = await ctx.db.get(args.versionId);
+    if (!version) return null;
+    const skill = await ctx.db.get(version.skillId);
+    const authUserId = await getAuthUserId(ctx);
+    const actor = authUserId ? await ctx.db.get(authUserId) : null;
+    if (!skill || !(await canReadSkillVersion(ctx, skill, actor))) return null;
+    return toPublicSkillVersion(version);
+  },
 });
 
 export const getVersionsByIdsInternal = internalQuery({
@@ -3336,6 +3058,34 @@ export const getVersionBySkillAndVersionInternal = internalQuery({
 export const getSkillByIdInternal = internalQuery({
   args: { skillId: v.id("skills") },
   handler: async (ctx, args) => ctx.db.get(args.skillId),
+});
+
+export const canReadSkillInternal = internalQuery({
+  args: {
+    skillId: v.id("skills"),
+    userId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const skill = await ctx.db.get(args.skillId);
+    if (!skill) return false;
+    const actor = args.userId ? await ctx.db.get(args.userId) : null;
+    return await canReadSkill(ctx, skill, actor);
+  },
+});
+
+export const canReadSkillFileInternal = internalQuery({
+  args: {
+    versionId: v.id("skillVersions"),
+    userId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const version = await ctx.db.get(args.versionId);
+    if (!version) return false;
+    const skill = await ctx.db.get(version.skillId);
+    if (!skill) return false;
+    const actor = args.userId ? await ctx.db.get(args.userId) : null;
+    return await canReadSkillFile(ctx, skill, version, actor);
+  },
 });
 
 export const getPendingScanSkillsInternal = internalQuery({
@@ -3867,7 +3617,8 @@ export const updateSkillVersionStaticScanInternal = internalMutation({
   },
   handler: async (ctx, args) => {
     const version = await ctx.db.get(args.versionId);
-    if (!version || version.skillId !== args.skillId) return { ok: true as const, skipped: "missing" as const };
+    if (!version || version.skillId !== args.skillId)
+      return { ok: true as const, skipped: "missing" as const };
 
     await ctx.db.patch(version._id, {
       staticScan: args.staticScan,
@@ -3913,37 +3664,39 @@ export const updateSkillVersionStaticScanInternal = internalMutation({
   },
 });
 
-export const scanSkillVersionStaticallyInternal: ReturnType<typeof internalAction> = internalAction({
-  args: {
-    skillId: v.id("skills"),
-    versionId: v.id("skillVersions"),
+export const scanSkillVersionStaticallyInternal: ReturnType<typeof internalAction> = internalAction(
+  {
+    args: {
+      skillId: v.id("skills"),
+      versionId: v.id("skillVersions"),
+    },
+    handler: async (ctx, args) => {
+      const [skill, version] = await Promise.all([
+        ctx.runQuery(internal.skills.getSkillByIdInternal, { skillId: args.skillId }),
+        ctx.runQuery(internal.skills.getVersionByIdInternal, { versionId: args.versionId }),
+      ]);
+
+      if (!skill || !version) {
+        return { ok: true as const, skipped: "missing" as const };
+      }
+
+      const staticScan = await runStaticPublishScan(ctx, {
+        slug: skill.slug,
+        displayName: skill.displayName,
+        summary: skill.summary ?? undefined,
+        frontmatter: version.parsed?.frontmatter ?? {},
+        metadata: version.parsed?.metadata,
+        files: version.files,
+      });
+
+      return await ctx.runMutation(internal.skills.updateSkillVersionStaticScanInternal, {
+        skillId: skill._id,
+        versionId: version._id,
+        staticScan,
+      });
+    },
   },
-  handler: async (ctx, args) => {
-    const [skill, version] = await Promise.all([
-      ctx.runQuery(internal.skills.getSkillByIdInternal, { skillId: args.skillId }),
-      ctx.runQuery(internal.skills.getVersionByIdInternal, { versionId: args.versionId }),
-    ]);
-
-    if (!skill || !version) {
-      return { ok: true as const, skipped: "missing" as const };
-    }
-
-    const staticScan = await runStaticPublishScan(ctx, {
-      slug: skill.slug,
-      displayName: skill.displayName,
-      summary: skill.summary ?? undefined,
-      frontmatter: version.parsed?.frontmatter ?? {},
-      metadata: version.parsed?.metadata,
-      files: version.files,
-    });
-
-    return await ctx.runMutation(internal.skills.updateSkillVersionStaticScanInternal, {
-      skillId: skill._id,
-      versionId: version._id,
-      staticScan,
-    });
-  },
-});
+);
 
 export const backfillSkillStaticScansInternal: ReturnType<typeof internalAction> = internalAction({
   args: {
@@ -3953,10 +3706,13 @@ export const backfillSkillStaticScansInternal: ReturnType<typeof internalAction>
   },
   handler: async (ctx, args) => {
     const batchSize = Math.max(1, Math.min(args.batchSize ?? 25, 100));
-    const batch = await ctx.runQuery(internal.skills.getActiveSkillBatchForStaticScanBackfillInternal, {
-      cursor: args.cursor,
-      batchSize,
-    });
+    const batch = await ctx.runQuery(
+      internal.skills.getActiveSkillBatchForStaticScanBackfillInternal,
+      {
+        cursor: args.cursor,
+        batchSize,
+      },
+    );
 
     let rescanned = args.rescanned ?? 0;
     for (const skill of batch.skills) {
@@ -4802,6 +4558,10 @@ export const getVersionBySkillAndVersion = query({
         q.eq("skillId", args.skillId).eq("version", args.version),
       )
       .unique();
+    const skill = await ctx.db.get(args.skillId);
+    const authUserId = await getAuthUserId(ctx);
+    const actor = authUserId ? await ctx.db.get(authUserId) : null;
+    if (!skill || !(await canReadSkillVersion(ctx, skill, actor))) return null;
     return toPublicSkillVersion(version);
   },
 });
@@ -4867,35 +4627,11 @@ export const generateChangelogPreview = action({
 });
 
 async function canReadSkillVersionFiles(ctx: ActionCtx, version: Doc<"skillVersions">) {
-  const skill = (await ctx.runQuery(internal.skills.getSkillByIdInternal, {
-    skillId: version.skillId,
-  })) as Doc<"skills"> | null;
-  if (!skill) return false;
-
   const authUserId = await getAuthUserId(ctx);
-  if (authUserId) {
-    if (authUserId === skill.ownerUserId && !skill.softDeletedAt && !version.softDeletedAt) {
-      return true;
-    }
-    if (skill.ownerPublisherId && !skill.softDeletedAt && !version.softDeletedAt) {
-      const memberRole = (await ctx.runQuery(internal.publishers.getMemberRoleInternal, {
-        publisherId: skill.ownerPublisherId,
-        userId: authUserId,
-      })) as "owner" | "admin" | "publisher" | null;
-      if (memberRole) {
-        return true;
-      }
-    }
-    const actor = (await ctx.runQuery(internal.users.getByIdInternal, {
-      userId: authUserId,
-    })) as Doc<"users"> | null;
-    if (actor?.role === "admin" || actor?.role === "moderator") return true;
-  }
-
-  if (skill.softDeletedAt || version.softDeletedAt) return false;
-
-  const isMalwareBlocked = skill.moderationFlags?.includes("blocked.malware") ?? false;
-  return Boolean(toPublicSkill(skill) || isMalwareBlocked);
+  return (await ctx.runQuery(internal.skills.canReadSkillFileInternal, {
+    versionId: version._id,
+    userId: authUserId ?? undefined,
+  })) as boolean;
 }
 
 export const getReadme: ReturnType<typeof action> = action({
@@ -5359,6 +5095,173 @@ export const changeOwner = mutation({
       metadata: { from: skill.ownerUserId, to: args.ownerUserId },
       createdAt: now,
     });
+  },
+});
+
+const skillVisibilityArg = v.union(
+  v.literal("public"),
+  v.literal("restricted"),
+  v.literal("private"),
+);
+
+export const setVisibility = mutation({
+  args: {
+    skillId: v.id("skills"),
+    visibility: skillVisibilityArg,
+  },
+  handler: async (ctx, args) => {
+    const { user } = await requireUser(ctx);
+    const skill = await ctx.db.get(args.skillId);
+    if (!skill) throw new ConvexError("Skill not found");
+    if (!(await canManageSkillAccess(ctx, skill, user))) throw new ConvexError("Forbidden");
+
+    const now = Date.now();
+    const patch: Partial<Doc<"skills">> = {
+      visibility: args.visibility,
+      updatedAt: now,
+    };
+    const nextSkill = { ...skill, ...patch };
+    await ctx.db.patch(skill._id, patch);
+    await adjustGlobalPublicCountForSkillChange(ctx, skill, nextSkill);
+
+    await ctx.db.insert("auditLogs", {
+      actorUserId: user._id,
+      action: "skill.visibility.set",
+      targetType: "skill",
+      targetId: skill._id,
+      metadata: { from: getSkillVisibility(skill), to: args.visibility },
+      createdAt: now,
+    });
+
+    return { ok: true as const, visibility: args.visibility };
+  },
+});
+
+export const listAccessGrants = query({
+  args: { skillId: v.id("skills") },
+  handler: async (ctx, args) => {
+    const { user } = await requireUser(ctx);
+    const skill = await ctx.db.get(args.skillId);
+    if (!skill) throw new ConvexError("Skill not found");
+    if (!(await canManageSkillAccess(ctx, skill, user))) throw new ConvexError("Forbidden");
+
+    const grants = await ctx.db
+      .query("skillAccessGrants")
+      .withIndex("by_skill", (q) => q.eq("skillId", args.skillId))
+      .collect();
+    return await Promise.all(
+      grants.map(async (grant) => ({
+        ...grant,
+        user: grant.subjectUserId ? toPublicUser(await ctx.db.get(grant.subjectUserId)) : null,
+        publisher: grant.subjectPublisherId
+          ? toPublicPublisher(await ctx.db.get(grant.subjectPublisherId))
+          : null,
+      })),
+    );
+  },
+});
+
+export const grantAccess = mutation({
+  args: {
+    skillId: v.id("skills"),
+    subjectType: v.union(v.literal("user"), v.literal("publisher")),
+    userHandle: v.optional(v.string()),
+    userId: v.optional(v.id("users")),
+    publisherHandle: v.optional(v.string()),
+    publisherId: v.optional(v.id("publishers")),
+  },
+  handler: async (ctx, args) => {
+    const { user } = await requireUser(ctx);
+    const skill = await ctx.db.get(args.skillId);
+    if (!skill) throw new ConvexError("Skill not found");
+    if (!(await canManageSkillAccess(ctx, skill, user))) throw new ConvexError("Forbidden");
+
+    let subjectUserId: Id<"users"> | undefined;
+    let subjectPublisherId: Id<"publishers"> | undefined;
+    if (args.subjectType === "user") {
+      const targetUser = args.userId
+        ? await ctx.db.get(args.userId)
+        : await getActiveUserByHandleOrPersonalPublisher(ctx, args.userHandle);
+      if (!targetUser || targetUser.deletedAt || targetUser.deactivatedAt) {
+        throw new ConvexError("User not found");
+      }
+      subjectUserId = targetUser._id;
+    } else {
+      const targetPublisher = args.publisherId
+        ? await ctx.db.get(args.publisherId)
+        : await getPublisherByHandle(ctx, args.publisherHandle);
+      if (!targetPublisher || targetPublisher.deletedAt || targetPublisher.deactivatedAt) {
+        throw new ConvexError("Publisher not found");
+      }
+      subjectPublisherId = targetPublisher._id;
+    }
+
+    const existing =
+      args.subjectType === "user"
+        ? await ctx.db
+            .query("skillAccessGrants")
+            .withIndex("by_skill_user", (q) =>
+              q.eq("skillId", skill._id).eq("subjectUserId", subjectUserId),
+            )
+            .unique()
+        : await ctx.db
+            .query("skillAccessGrants")
+            .withIndex("by_skill_publisher", (q) =>
+              q.eq("skillId", skill._id).eq("subjectPublisherId", subjectPublisherId),
+            )
+            .unique();
+    if (existing) return { ok: true as const, grantId: existing._id, alreadyGranted: true };
+
+    const now = Date.now();
+    const grantId = await ctx.db.insert("skillAccessGrants", {
+      skillId: skill._id,
+      subjectType: args.subjectType,
+      subjectUserId,
+      subjectPublisherId,
+      createdByUserId: user._id,
+      createdAt: now,
+    });
+    await ctx.db.insert("auditLogs", {
+      actorUserId: user._id,
+      action: "skill.access.grant",
+      targetType: "skill",
+      targetId: skill._id,
+      metadata: {
+        grantId,
+        subjectType: args.subjectType,
+        subjectUserId,
+        subjectPublisherId,
+      },
+      createdAt: now,
+    });
+    return { ok: true as const, grantId, alreadyGranted: false };
+  },
+});
+
+export const revokeAccess = mutation({
+  args: { grantId: v.id("skillAccessGrants") },
+  handler: async (ctx, args) => {
+    const { user } = await requireUser(ctx);
+    const grant = await ctx.db.get(args.grantId);
+    if (!grant) return { ok: true as const };
+    const skill = await ctx.db.get(grant.skillId);
+    if (!skill) throw new ConvexError("Skill not found");
+    if (!(await canManageSkillAccess(ctx, skill, user))) throw new ConvexError("Forbidden");
+    await ctx.db.delete(grant._id);
+    await ctx.db.insert("auditLogs", {
+      actorUserId: user._id,
+      action: "skill.access.revoke",
+      targetType: "skill",
+      targetId: skill._id,
+      metadata: {
+        grantId: grant._id,
+        subjectType: grant.subjectType,
+        subjectUserId: grant.subjectUserId,
+        subjectPublisherId: grant.subjectPublisherId,
+      },
+      createdAt: Date.now(),
+    });
+    return { ok: true as const };
   },
 });
 
@@ -5828,6 +5731,21 @@ export const reclaimSlugInternal = internalMutation({
           hadSquatter: true,
           transferRootSlugOnly: true,
           action: "ownership_transferred",
+          reason: args.reason || undefined,
+        },
+        createdAt: now,
+      });
+      await ctx.db.insert("auditLogs", {
+        actorUserId: args.actorUserId,
+        action: "skill.owner.change",
+        targetType: "skill",
+        targetId: existingSkill._id,
+        metadata: {
+          from: existingSkill.ownerUserId,
+          to: args.rightfulOwnerUserId,
+          slug,
+          source: "slug.reclaim",
+          transferRootSlugOnly: true,
           reason: args.reason || undefined,
         },
         createdAt: now,
@@ -6375,6 +6293,7 @@ export const insertVersion = internalMutation({
         latestVersionId: undefined,
         tags: {},
         capabilityTags: args.capabilityTags,
+        visibility: "public",
         softDeletedAt: undefined,
         badges: {
           redactionApproved: undefined,
@@ -6490,6 +6409,7 @@ export const insertVersion = internalMutation({
       },
       tags: nextTags,
       capabilityTags: args.capabilityTags,
+      visibility: skill.visibility ?? "public",
       stats: { ...skill.stats, versions: skill.stats.versions + 1 },
       softDeletedAt: undefined,
       moderationStatus: initialModerationStatus,

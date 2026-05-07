@@ -14,16 +14,16 @@ const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
         "inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] text-[0.8rem] font-semibold",
         // Variant styles
         variant === "default" && [
-          "bg-[rgba(43,198,164,0.16)] px-3 py-1 text-[#1a6b5b]",
-          "dark:bg-[rgba(232,106,71,0.2)] dark:text-[#ffd0bf]",
+          "bg-[rgba(37,99,235,0.12)] px-3 py-1 text-[#1e40af]",
+          "dark:bg-[rgba(96,165,250,0.18)] dark:text-[#dbeafe]",
         ],
         variant === "accent" && [
-          "bg-[rgba(255,107,74,0.16)] px-3 py-1 text-[color:var(--accent-deep)]",
-          "dark:bg-[rgba(232,106,71,0.24)] dark:text-[#ffd0bf]",
+          "bg-[rgba(37,99,235,0.16)] px-3 py-1 text-[color:var(--accent-deep)]",
+          "dark:bg-[rgba(96,165,250,0.24)] dark:text-[#dbeafe]",
         ],
         variant === "compact" && [
-          "bg-[rgba(43,198,164,0.16)] px-2.5 py-0.5 text-[0.72rem] text-[#1a6b5b]",
-          "dark:bg-[rgba(232,106,71,0.2)] dark:text-[#ffd0bf]",
+          "bg-[rgba(37,99,235,0.12)] px-2.5 py-0.5 text-[0.72rem] text-[#1e40af]",
+          "dark:bg-[rgba(96,165,250,0.18)] dark:text-[#dbeafe]",
         ],
         variant === "pending" && [
           "bg-[rgba(240,196,106,0.2)] px-3 py-1 text-[#8a6914]",

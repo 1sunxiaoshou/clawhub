@@ -24,6 +24,14 @@ const users = defineTable({
   displayName: v.optional(v.string()),
   bio: v.optional(v.string()),
   role: v.optional(v.union(v.literal("admin"), v.literal("moderator"), v.literal("user"))),
+  primaryLoginMethod: v.optional(
+    v.union(v.literal("password"), v.literal("wecom"), v.literal("github")),
+  ),
+  lastLoginAt: v.optional(v.number()),
+  lastLoginMethod: v.optional(
+    v.union(v.literal("password"), v.literal("wecom"), v.literal("github")),
+  ),
+  passwordEnabled: v.optional(v.boolean()),
   githubCreatedAt: v.optional(v.number()),
   githubFetchedAt: v.optional(v.number()),
   githubProfileSyncedAt: v.optional(v.number()),
@@ -102,6 +110,10 @@ const statsValidator = v.object({
 
 const moderationStatusValidator = v.optional(
   v.union(v.literal("active"), v.literal("hidden"), v.literal("removed")),
+);
+
+const skillVisibilityValidator = v.optional(
+  v.union(v.literal("public"), v.literal("restricted"), v.literal("private")),
 );
 
 const packageFamilyValidator = v.union(
@@ -246,6 +258,7 @@ const skills = defineTable({
   ),
   tags: v.record(v.string(), v.id("skillVersions")),
   capabilityTags: v.optional(v.array(v.string())),
+  visibility: skillVisibilityValidator,
   softDeletedAt: v.optional(v.number()),
   badges: badgesValidator,
   moderationStatus: moderationStatusValidator,
@@ -362,6 +375,20 @@ const skillSlugAliases = defineTable({
   .index("by_skill", ["skillId"])
   .index("by_owner", ["ownerUserId"])
   .index("by_owner_publisher", ["ownerPublisherId"]);
+
+const skillAccessGrants = defineTable({
+  skillId: v.id("skills"),
+  subjectType: v.union(v.literal("user"), v.literal("publisher")),
+  subjectUserId: v.optional(v.id("users")),
+  subjectPublisherId: v.optional(v.id("publishers")),
+  createdByUserId: v.id("users"),
+  createdAt: v.number(),
+})
+  .index("by_skill", ["skillId"])
+  .index("by_skill_user", ["skillId", "subjectUserId"])
+  .index("by_skill_publisher", ["skillId", "subjectPublisherId"])
+  .index("by_subject_user", ["subjectUserId"])
+  .index("by_subject_publisher", ["subjectPublisherId"]);
 
 const souls = defineTable({
   slug: v.string(),
@@ -586,6 +613,7 @@ const skillSearchDigest = defineTable({
   ),
   tags: v.record(v.string(), v.id("skillVersions")),
   capabilityTags: v.optional(v.array(v.string())),
+  visibility: skillVisibilityValidator,
   badges: badgesValidator,
   stats: statsValidator,
   statsDownloads: v.optional(v.number()),
@@ -1245,6 +1273,14 @@ const githubBackupSyncState = defineTable({
   updatedAt: v.number(),
 }).index("by_key", ["key"]);
 
+const ownerPublisherDigestSyncState = defineTable({
+  ownerPublisherId: v.id("publishers"),
+  kind: v.union(v.literal("package"), v.literal("skill")),
+  status: v.union(v.literal("scheduled"), v.literal("running")),
+  pendingResync: v.boolean(),
+  updatedAt: v.number(),
+}).index("by_owner_kind", ["ownerPublisherId", "kind"]);
+
 const userSyncRoots = defineTable({
   userId: v.id("users"),
   rootId: v.string(),
@@ -1306,6 +1342,53 @@ const skillOwnershipTransfers = defineTable({
   .index("by_from_user_status", ["fromUserId", "status"])
   .index("by_skill_status", ["skillId", "status"]);
 
+const publicProxies = defineTable({
+  address: v.string(),
+  protocol: v.union(v.literal("http"), v.literal("https")),
+  status: v.union(v.literal("active"), v.literal("failed")),
+  failCount: v.number(),
+  updatedAt: v.number(),
+})
+  .index("by_address", ["address"])
+  .index("by_status_updated", ["status", "updatedAt"]);
+
+const clawhubSyncJobs = defineTable({
+  source: v.literal("clawhub"),
+  sourceUrl: v.string(),
+  startedByUserId: v.id("users"),
+  localUserId: v.id("users"),
+  status: v.union(
+    v.literal("running"),
+    v.literal("failed"),
+    v.literal("paused"),
+    v.literal("done"),
+  ),
+  pageSize: v.number(),
+  downloadBaseUrl: v.optional(v.string()),
+  cursor: v.optional(v.string()),
+  hasMore: v.boolean(),
+  totalCount: v.optional(v.number()),
+  importedCount: v.number(),
+  skippedCount: v.number(),
+  failedCount: v.number(),
+  pageCount: v.number(),
+  attempts: v.number(),
+  lastError: v.optional(v.string()),
+  recentFailures: v.array(
+    v.object({
+      slug: v.string(),
+      reason: v.string(),
+      at: v.number(),
+    }),
+  ),
+  startedAt: v.number(),
+  updatedAt: v.number(),
+  finishedAt: v.optional(v.number()),
+})
+  .index("by_status_updated", ["status", "updatedAt"])
+  .index("by_started_by_updated", ["startedByUserId", "updatedAt"])
+  .index("by_updated", ["updatedAt"]);
+
 export default defineSchema({
   ...authTables,
   users,
@@ -1313,6 +1396,7 @@ export default defineSchema({
   publisherMembers,
   skills,
   skillSlugAliases,
+  skillAccessGrants,
   packages,
   packageReleases,
   packageTrustedPublishers,
@@ -1349,8 +1433,11 @@ export default defineSchema({
   reservedSlugs,
   reservedHandles,
   githubBackupSyncState,
+  ownerPublisherDigestSyncState,
   userSyncRoots,
   userSkillInstalls,
   userSkillRootInstalls,
   skillOwnershipTransfers,
+  publicProxies,
+  clawhubSyncJobs,
 });

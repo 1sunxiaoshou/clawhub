@@ -244,6 +244,27 @@ describe("skills package catalog queries", () => {
     ]);
   });
 
+  it("does not expose restricted or private skills", async () => {
+    const result = await listPackageCatalogPageHandler(
+      makeCtx([
+        {
+          page: [
+            makeDigest("public-skill"),
+            makeDigest("restricted-skill", { visibility: "restricted" }),
+            makeDigest("private-skill", { visibility: "private" }),
+          ],
+          isDone: true,
+          continueCursor: "",
+        },
+      ]),
+      {
+        paginationOpts: { cursor: null, numItems: 10 },
+      },
+    );
+
+    expect(result.page.map((item) => item.name)).toEqual(["public-skill"]);
+  });
+
   it("returns empty immediately for unknown capability tags", async () => {
     const result = await listPackageCatalogPageHandler(
       makeCtx([

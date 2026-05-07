@@ -1,5 +1,5 @@
 ---
-summary: "Marketplace policy: what ClawHub will not allow."
+summary: "Marketplace policy: what Deep Skill Hub will not allow."
 read_when:
   - Reviewing uploads for abuse or policy violations
   - Writing moderation docs or reviewer runbooks
@@ -8,9 +8,9 @@ read_when:
 
 # Acceptable Usage
 
-This page describes the kinds of skills and content ClawHub is not okay with.
+This page describes the kinds of skills and content Deep Skill Hub is not okay with.
 
-These rules are intentionally practical. We care most about end-to-end abuse workflows, not just isolated keywords. If a skill is built to evade defenses, abuse platforms, scam people, invade privacy, or enable non-consensual behavior, it does not belong on ClawHub.
+These rules are intentionally practical. We care most about end-to-end abuse workflows, not just isolated keywords. If a skill is built to evade defenses, abuse platforms, scam people, invade privacy, or enable non-consensual behavior, it does not belong on Deep Skill Hub.
 
 ## Not okay
 

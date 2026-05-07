@@ -62,10 +62,11 @@ bunx convex env set SITE_URL http://localhost:3000
 With the backend still running, generate the signing keys:
 
 ```bash
-bunx @convex-dev/auth
+bun run auth:keys -- --write .tmp-auth.env
+bunx convex env set --from-file .tmp-auth.env --force
 ```
 
-This sets `JWT_PRIVATE_KEY` and `JWKS` on the Convex backend and outputs values you can also save to `.env.local` for reference.
+This generates `JWT_PRIVATE_KEY` and `JWKS` locally, then sets them on the current Convex backend. You can also copy the generated values into `.env.local` for reference. Delete `.tmp-auth.env` after use.
 
 ### Run the frontend
 

@@ -1,12 +1,12 @@
 ---
-summary: "ClawHub spec: skills registry, versioning, vector search, moderation"
+summary: "Deep Skill Hub spec: skills registry, versioning, vector search, moderation"
 read_when:
-  - Bootstrapping ClawHub
+  - Bootstrapping Deep Skill Hub
   - Implementing schema/auth/search/versioning
   - Reviewing API and upload/download flows
 ---
 
-# ClawHub — product + implementation spec (v1)
+# Deep Skill Hub — product + implementation spec (v1)
 
 ## Goals
 

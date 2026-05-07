@@ -3,12 +3,12 @@ import path from "node:path";
 
 const copies = [
   {
-    source: path.resolve("public/clawd-mark.png"),
+    source: path.resolve("public/deepdata-logo.png"),
     targets: [
-      path.resolve(".output/server/clawd-mark.png"),
-      path.resolve(".output/server/public/clawd-mark.png"),
-      path.resolve(".vercel/output/functions/__server.func/clawd-mark.png"),
-      path.resolve(".vercel/output/functions/__server.func/public/clawd-mark.png"),
+      path.resolve(".output/server/deepdata-logo.png"),
+      path.resolve(".output/server/public/deepdata-logo.png"),
+      path.resolve(".vercel/output/functions/__server.func/deepdata-logo.png"),
+      path.resolve(".vercel/output/functions/__server.func/public/deepdata-logo.png"),
     ],
   },
   {

@@ -9,6 +9,7 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { formatRetryDelay } from "../../lib/formatRetryDelay";
+import { useI18n } from "../../lib/i18n";
 import {
   fetchPackageDetail,
   fetchPackageReadme,
@@ -117,6 +118,8 @@ export const Route = createFileRoute("/plugins/$name")({
 });
 
 function VerifiedBadge() {
+  const { locale } = useI18n();
+  const label = locale === "zh-CN" ? "已验证发布者" : "Verified publisher";
   return (
     <span className="inline-flex items-center gap-1.5 text-[#3b82f6]">
       <svg
@@ -125,7 +128,7 @@ function VerifiedBadge() {
         viewBox="0 0 16 16"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        aria-label="Verified publisher"
+        aria-label={label}
         className="shrink-0"
       >
         <path
@@ -140,7 +143,7 @@ function VerifiedBadge() {
           strokeLinejoin="round"
         />
       </svg>
-      Verified
+      {locale === "zh-CN" ? "已验证" : "Verified"}
     </span>
   );
 }
@@ -163,7 +166,20 @@ function fallbackCopy(text: string): boolean {
 }
 
 function CopyButton({ text }: { text: string }) {
+  const { locale } = useI18n();
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const label =
+    state === "copied"
+      ? locale === "zh-CN"
+        ? "已复制"
+        : "Copied"
+      : state === "failed"
+        ? locale === "zh-CN"
+          ? "复制失败"
+          : "Failed"
+        : locale === "zh-CN"
+          ? "复制"
+          : "Copy";
   return (
     <Button
       variant="outline"
@@ -194,37 +210,60 @@ function CopyButton({ text }: { text: string }) {
           setTimeout(() => setState("idle"), 2000);
         }
       }}
-      aria-label="Copy to clipboard"
+      aria-label={locale === "zh-CN" ? "复制到剪贴板" : "Copy to clipboard"}
     >
       {state === "copied" ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-      {state === "copied" ? "Copied" : state === "failed" ? "Failed" : "Copy"}
+      {label}
     </Button>
   );
 }
 
-const CAPABILITY_LABELS: Record<string, string> = {
-  executesCode: "Executes code",
-  runtimeId: "Runtime ID",
-  pluginKind: "Plugin kind",
-  channels: "Channels",
-  providers: "Providers",
-  hooks: "Hooks",
-  bundledSkills: "Bundled skills",
-  setupEntry: "Setup entry",
-  toolNames: "Tools",
-  commandNames: "Commands",
-  serviceNames: "Services",
-  capabilityTags: "Tags",
-  httpRouteCount: "HTTP routes",
-  bundleFormat: "Bundle format",
-  hostTargets: "Host targets",
-};
+function getCapabilityLabels(locale: "zh-CN" | "en"): Record<string, string> {
+  return locale === "zh-CN"
+    ? {
+        executesCode: "会执行代码",
+        runtimeId: "运行时 ID",
+        pluginKind: "插件类型",
+        channels: "渠道",
+        providers: "Provider",
+        hooks: "Hooks",
+        bundledSkills: "内置技能",
+        setupEntry: "安装入口",
+        toolNames: "工具",
+        commandNames: "命令",
+        serviceNames: "服务",
+        capabilityTags: "标签",
+        httpRouteCount: "HTTP 路由",
+        bundleFormat: "打包格式",
+        hostTargets: "宿主目标",
+      }
+    : {
+        executesCode: "Executes code",
+        runtimeId: "Runtime ID",
+        pluginKind: "Plugin kind",
+        channels: "Channels",
+        providers: "Providers",
+        hooks: "Hooks",
+        bundledSkills: "Bundled skills",
+        setupEntry: "Setup entry",
+        toolNames: "Tools",
+        commandNames: "Commands",
+        serviceNames: "Services",
+        capabilityTags: "Tags",
+        httpRouteCount: "HTTP routes",
+        bundleFormat: "Bundle format",
+        hostTargets: "Host targets",
+      };
+}
 
-function formatCapabilityValue(value: unknown): string {
-  if (typeof value === "boolean") return value ? "Yes" : "No";
+function formatCapabilityValue(
+  value: unknown,
+  text: { yes: string; no: string; none: string },
+): string {
+  if (typeof value === "boolean") return value ? text.yes : text.no;
   if (typeof value === "number") return String(value);
   if (typeof value === "string") return value;
-  if (Array.isArray(value)) return value.length === 0 ? "None" : value.join(", ");
+  if (Array.isArray(value)) return value.length === 0 ? text.none : value.join(", ");
   return JSON.stringify(value);
 }
 
@@ -234,8 +273,74 @@ function isEmptyObject(obj: unknown): boolean {
 }
 
 function PluginDetailRoute() {
+  const { locale } = useI18n();
   const { name } = Route.useParams();
   const { detail, version, readme, rateLimited } = Route.useLoaderData() as PluginDetailLoaderData;
+  const capabilityLabels = getCapabilityLabels(locale);
+  const text =
+    locale === "zh-CN"
+      ? {
+          detailRateLimitedTitle: "插件详情暂时不可用",
+          detailRateLimitedDescription: `公共插件 API 当前触发了限流。请${formatRetryDelay(
+            rateLimited?.retryAfterSeconds ?? null,
+          )}后重试。`,
+          tryAgain: "重试",
+          notFoundTitle: "未找到插件",
+          notFoundDescription: "这个插件不存在，或已被移除。",
+          metadataUnavailable: "部分元数据暂时不可用",
+          noSummary: "未提供摘要。",
+          runtime: "运行时",
+          by: "作者",
+          communityWarning: "社区代码插件。安装前请先检查兼容性与验证状态。",
+          latestRelease: "最新版本",
+          downloadZip: "下载 zip",
+          capabilities: "能力",
+          compatibility: "兼容性",
+          verification: "验证",
+          source: "源码",
+          commit: "提交",
+          tag: "标签",
+          provenance: "来源证明",
+          scanStatus: "扫描状态",
+          tier: "等级",
+          scope: "范围",
+          summary: "摘要",
+          tags: "标签",
+          yes: "是",
+          no: "否",
+          none: "无",
+        }
+      : {
+          detailRateLimitedTitle: "Plugin details are temporarily unavailable",
+          detailRateLimitedDescription: `The public plugin API is rate-limited right now. Try again ${formatRetryDelay(
+            rateLimited?.retryAfterSeconds ?? null,
+          )}.`,
+          tryAgain: "Try again",
+          notFoundTitle: "Plugin not found",
+          notFoundDescription: "This plugin does not exist or has been removed.",
+          metadataUnavailable: "Some metadata is temporarily unavailable",
+          noSummary: "No summary provided.",
+          runtime: "runtime",
+          by: "by",
+          communityWarning: "Community code plugin. Review compatibility and verification before install.",
+          latestRelease: "Latest release",
+          downloadZip: "Download zip",
+          capabilities: "Capabilities",
+          compatibility: "Compatibility",
+          verification: "Verification",
+          source: "Source",
+          commit: "Commit",
+          tag: "Tag",
+          provenance: "Provenance",
+          scanStatus: "Scan status",
+          tier: "Tier",
+          scope: "Scope",
+          summary: "Summary",
+          tags: "Tags",
+          yes: "Yes",
+          no: "No",
+          none: "None",
+        };
 
   if (rateLimited?.scope === "detail") {
     return (
@@ -243,12 +348,10 @@ function PluginDetailRoute() {
         <Container size="narrow">
           <EmptyState
             icon={AlertTriangle}
-            title="Plugin details are temporarily unavailable"
-            description={`The public plugin API is rate-limited right now. Try again ${formatRetryDelay(
-              rateLimited.retryAfterSeconds,
-            )}.`}
+            title={text.detailRateLimitedTitle}
+            description={text.detailRateLimitedDescription}
             action={{
-              label: "Try again",
+              label: text.tryAgain,
               onClick: () => window.location.reload(),
             }}
           />
@@ -262,8 +365,8 @@ function PluginDetailRoute() {
       <main className="py-10">
         <Container size="narrow">
           <EmptyState
-            title="Plugin not found"
-            description="This plugin does not exist or has been removed."
+            title={text.notFoundTitle}
+            description={text.notFoundDescription}
           />
         </Container>
       </main>
@@ -308,7 +411,7 @@ function PluginDetailRoute() {
                   <Badge variant="compact">{verification.tier.replace(/-/g, " ")}</Badge>
                 ) : null}
                 {rateLimited?.scope === "metadata" ? (
-                  <Badge variant="compact">Some metadata is temporarily unavailable</Badge>
+                  <Badge variant="compact">{text.metadataUnavailable}</Badge>
                 ) : null}
                 {pkg.isOfficial ? (
                   <Badge className="bg-[rgba(59,130,246,0.15)] text-[#3b82f6]">
@@ -325,7 +428,7 @@ function PluginDetailRoute() {
                 ) : null}
               </h1>
               <p className="text-sm text-[color:var(--ink-soft)] mb-2">
-                {pkg.summary ?? "No summary provided."}
+                {pkg.summary ?? text.noSummary}
               </p>
               <div className="flex flex-wrap items-center gap-2 text-sm text-[color:var(--ink-soft)]">
                 <span className="font-mono text-xs">{pkg.name}</span>
@@ -333,7 +436,7 @@ function PluginDetailRoute() {
                   <>
                     <span className="opacity-40">&middot;</span>
                     <span>
-                      runtime <span className="font-mono text-xs">{pkg.runtimeId}</span>
+                      {text.runtime} <span className="font-mono text-xs">{pkg.runtimeId}</span>
                     </span>
                   </>
                 ) : null}
@@ -345,7 +448,7 @@ function PluginDetailRoute() {
                       params={{ handle: owner.handle }}
                       className="text-[color:var(--accent)] hover:underline"
                     >
-                      by @{owner.handle}
+                      {text.by} @{owner.handle}
                     </Link>
                   </>
                 ) : null}
@@ -353,7 +456,7 @@ function PluginDetailRoute() {
 
               {pkg.family === "code-plugin" && !pkg.isOfficial ? (
                 <Badge variant="accent" className="mt-3 self-start">
-                  Community code plugin. Review compatibility and verification before install.
+                  {text.communityWarning}
                 </Badge>
               ) : null}
 
@@ -371,14 +474,14 @@ function PluginDetailRoute() {
               {pkg.latestVersion ? (
                 <div className="mt-3 flex flex-col gap-3 rounded-[var(--radius-sm)] border border-[color:var(--line)] bg-[color:var(--surface-muted)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-2">
                   <span className="text-sm">
-                    Latest release: <strong>v{pkg.latestVersion}</strong>
+                    {text.latestRelease}: <strong>v{pkg.latestVersion}</strong>
                   </span>
                   <a
                     href={getPackageDownloadPath(name, pkg.latestVersion)}
                     className="inline-flex min-h-[34px] w-full items-center justify-center gap-2 rounded-[var(--radius-pill)] border border-[color:var(--border-ui)] bg-transparent px-3 py-1.5 text-xs font-semibold text-[color:var(--ink)] transition-all duration-200 no-underline hover:border-[color:var(--border-ui-hover)] hover:bg-[color:var(--surface)] sm:w-auto sm:whitespace-nowrap"
                   >
                     <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                    Download zip
+                    {text.downloadZip}
                   </a>
                 </div>
               ) : null}
@@ -389,7 +492,7 @@ function PluginDetailRoute() {
           {capEntries.length > 0 ? (
             <Card>
               <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <CardTitle>Capabilities</CardTitle>
+                <CardTitle>{text.capabilities}</CardTitle>
                 <CopyButton text={JSON.stringify(capabilities, null, 2)} />
               </CardHeader>
               <CardContent>
@@ -397,7 +500,7 @@ function PluginDetailRoute() {
                   {capEntries.map(([key, value]) => (
                     <div key={key} className="flex flex-col gap-1.5 border-b border-[color:var(--line)] pb-3 last:border-b-0 last:pb-0 sm:grid sm:grid-cols-[minmax(140px,220px)_1fr] sm:gap-x-4 sm:gap-y-0">
                       <dt className="font-semibold text-[color:var(--ink-soft)] sm:pr-2">
-                        {CAPABILITY_LABELS[key] ?? key}
+                        {capabilityLabels[key] ?? key}
                       </dt>
                       <dd className="text-[color:var(--ink)]">
                         {key === "capabilityTags" && Array.isArray(value) ? (
@@ -417,7 +520,7 @@ function PluginDetailRoute() {
                             ))}
                           </div>
                         ) : (
-                          formatCapabilityValue(value)
+                          formatCapabilityValue(value, text)
                         )}
                       </dd>
                     </div>
@@ -431,7 +534,7 @@ function PluginDetailRoute() {
           {compatEntries.length > 0 ? (
             <Card>
               <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <CardTitle>Compatibility</CardTitle>
+                <CardTitle>{text.compatibility}</CardTitle>
                 <CopyButton text={JSON.stringify(compatibility, null, 2)} />
               </CardHeader>
               <CardContent>
@@ -467,13 +570,13 @@ function PluginDetailRoute() {
           {verification && !isEmptyObject(verification) ? (
             <Card>
               <CardHeader>
-                <CardTitle>Verification</CardTitle>
+                <CardTitle>{text.verification}</CardTitle>
               </CardHeader>
               <CardContent>
                 <dl className="flex flex-col gap-3 text-sm">
                   {verification.tier ? (
                     <div className="flex flex-col gap-1.5 border-b border-[color:var(--line)] pb-3 sm:grid sm:grid-cols-[minmax(140px,220px)_1fr] sm:gap-x-4 sm:gap-y-0">
-                      <dt className="font-semibold text-[color:var(--ink-soft)]">Tier</dt>
+                      <dt className="font-semibold text-[color:var(--ink-soft)]">{text.tier}</dt>
                       <dd className="text-[color:var(--ink)]">
                         {verification.tier.replace(/-/g, " ")}
                       </dd>
@@ -481,7 +584,7 @@ function PluginDetailRoute() {
                   ) : null}
                   {verification.scope ? (
                     <div className="flex flex-col gap-1.5 border-b border-[color:var(--line)] pb-3 sm:grid sm:grid-cols-[minmax(140px,220px)_1fr] sm:gap-x-4 sm:gap-y-0">
-                      <dt className="font-semibold text-[color:var(--ink-soft)]">Scope</dt>
+                      <dt className="font-semibold text-[color:var(--ink-soft)]">{text.scope}</dt>
                       <dd className="text-[color:var(--ink)]">
                         {verification.scope.replace(/-/g, " ")}
                       </dd>
@@ -489,7 +592,7 @@ function PluginDetailRoute() {
                   ) : null}
                   {verification.summary ? (
                     <div className="flex flex-col gap-1.5 border-b border-[color:var(--line)] pb-3 sm:grid sm:grid-cols-[minmax(140px,220px)_1fr] sm:gap-x-4 sm:gap-y-0">
-                      <dt className="font-semibold text-[color:var(--ink-soft)]">Summary</dt>
+                      <dt className="font-semibold text-[color:var(--ink-soft)]">{text.summary}</dt>
                       <dd className="text-[color:var(--ink)]">{verification.summary}</dd>
                     </div>
                   ) : null}
@@ -500,7 +603,7 @@ function PluginDetailRoute() {
                         const display = href.replace(/^https?:\/\//, "");
                         return (
                           <div className="flex flex-col gap-1.5 border-b border-[color:var(--line)] pb-3 sm:grid sm:grid-cols-[minmax(140px,220px)_1fr] sm:gap-x-4 sm:gap-y-0">
-                            <dt className="font-semibold text-[color:var(--ink-soft)]">Source</dt>
+                            <dt className="font-semibold text-[color:var(--ink-soft)]">{text.source}</dt>
                             <dd className="text-[color:var(--ink)]">
                               <a
                                 href={href}
@@ -518,7 +621,7 @@ function PluginDetailRoute() {
                     : null}
                   {verification.sourceCommit ? (
                     <div className="flex flex-col gap-1.5 border-b border-[color:var(--line)] pb-3 sm:grid sm:grid-cols-[minmax(140px,220px)_1fr] sm:gap-x-4 sm:gap-y-0">
-                      <dt className="font-semibold text-[color:var(--ink-soft)]">Commit</dt>
+                      <dt className="font-semibold text-[color:var(--ink-soft)]">{text.commit}</dt>
                       <dd className="font-mono text-xs text-[color:var(--ink)]">
                         {verification.sourceCommit.slice(0, 12)}
                       </dd>
@@ -526,7 +629,7 @@ function PluginDetailRoute() {
                   ) : null}
                   {verification.sourceTag ? (
                     <div className="flex flex-col gap-1.5 border-b border-[color:var(--line)] pb-3 sm:grid sm:grid-cols-[minmax(140px,220px)_1fr] sm:gap-x-4 sm:gap-y-0">
-                      <dt className="font-semibold text-[color:var(--ink-soft)]">Tag</dt>
+                      <dt className="font-semibold text-[color:var(--ink-soft)]">{text.tag}</dt>
                       <dd className="font-mono text-xs text-[color:var(--ink)]">
                         {verification.sourceTag}
                       </dd>
@@ -534,15 +637,15 @@ function PluginDetailRoute() {
                   ) : null}
                   {verification.hasProvenance !== undefined ? (
                     <div className="flex flex-col gap-1.5 border-b border-[color:var(--line)] pb-3 sm:grid sm:grid-cols-[minmax(140px,220px)_1fr] sm:gap-x-4 sm:gap-y-0">
-                      <dt className="font-semibold text-[color:var(--ink-soft)]">Provenance</dt>
+                      <dt className="font-semibold text-[color:var(--ink-soft)]">{text.provenance}</dt>
                       <dd className="text-[color:var(--ink)]">
-                        {verification.hasProvenance ? "Yes" : "No"}
+                        {verification.hasProvenance ? text.yes : text.no}
                       </dd>
                     </div>
                   ) : null}
                   {verification.scanStatus ? (
                     <div className="flex flex-col gap-1.5 last:border-b-0 last:pb-0 sm:grid sm:grid-cols-[minmax(140px,220px)_1fr] sm:gap-x-4 sm:gap-y-0">
-                      <dt className="font-semibold text-[color:var(--ink-soft)]">Scan status</dt>
+                      <dt className="font-semibold text-[color:var(--ink-soft)]">{text.scanStatus}</dt>
                       <dd className="text-[color:var(--ink)]">{verification.scanStatus}</dd>
                     </div>
                   ) : null}
@@ -555,7 +658,7 @@ function PluginDetailRoute() {
           {pkg.tags && Object.keys(pkg.tags).length > 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle>Tags</CardTitle>
+                <CardTitle>{text.tags}</CardTitle>
               </CardHeader>
               <CardContent>
                 <dl className="flex flex-col gap-3 text-sm">

@@ -13,13 +13,16 @@ import { Route as UploadRouteImport } from './routes/upload'
 import { Route as StarsRouteImport } from './routes/stars'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as RegisterRouteImport } from './routes/register'
 import { Route as PublishSkillRouteImport } from './routes/publish-skill'
 import { Route as PublishPluginRouteImport } from './routes/publish-plugin'
 import { Route as ManagementRouteImport } from './routes/management'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as ImportRouteImport } from './routes/import'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AdminRouteImport } from './routes/admin'
-import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SoulsIndexRouteImport } from './routes/souls/index'
 import { Route as SkillsIndexRouteImport } from './routes/skills/index'
@@ -27,13 +30,17 @@ import { Route as PluginsIndexRouteImport } from './routes/plugins/index'
 import { Route as PackagesIndexRouteImport } from './routes/packages/index'
 import { Route as UHandleRouteImport } from './routes/u/$handle'
 import { Route as SoulsSlugRouteImport } from './routes/souls/$slug'
+import { Route as SettingsPasswordRouteImport } from './routes/settings_.password'
+import { Route as SettingsSecurityRouteImport } from './routes/settings.security'
 import { Route as PluginsNewRouteImport } from './routes/plugins/new'
 import { Route as PluginsNameRouteImport } from './routes/plugins/$name'
 import { Route as PackagesNewRouteImport } from './routes/packages/new'
 import { Route as PackagesNameRouteImport } from './routes/packages/$name'
 import { Route as OrgsHandleRouteImport } from './routes/orgs/$handle'
+import { Route as LoginPasswordRouteImport } from './routes/login.password'
 import { Route as CliAuthRouteImport } from './routes/cli/auth'
 import { Route as OwnerSlugRouteImport } from './routes/$owner/$slug'
+import { Route as SettingsSecurityPasswordRouteImport } from './routes/settings.security.password'
 
 const UploadRoute = UploadRouteImport.update({
   id: '/upload',
@@ -55,6 +62,16 @@ const SearchRoute = SearchRouteImport.update({
   path: '/search',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PublishSkillRoute = PublishSkillRouteImport.update({
   id: '/publish-skill',
   path: '/publish-skill',
@@ -70,9 +87,19 @@ const ManagementRoute = ManagementRouteImport.update({
   path: '/management',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ImportRoute = ImportRouteImport.update({
   id: '/import',
   path: '/import',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -83,11 +110,6 @@ const DashboardRoute = DashboardRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AboutRoute = AboutRouteImport.update({
-  id: '/about',
-  path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -125,6 +147,16 @@ const SoulsSlugRoute = SoulsSlugRouteImport.update({
   path: '/souls/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsPasswordRoute = SettingsPasswordRouteImport.update({
+  id: '/settings_/password',
+  path: '/settings/password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsSecurityRoute = SettingsSecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const PluginsNewRoute = PluginsNewRouteImport.update({
   id: '/plugins/new',
   path: '/plugins/new',
@@ -150,6 +182,11 @@ const OrgsHandleRoute = OrgsHandleRouteImport.update({
   path: '/orgs/$handle',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginPasswordRoute = LoginPasswordRouteImport.update({
+  id: '/password',
+  path: '/password',
+  getParentRoute: () => LoginRoute,
+} as any)
 const CliAuthRoute = CliAuthRouteImport.update({
   id: '/cli/auth',
   path: '/cli/auth',
@@ -160,184 +197,235 @@ const OwnerSlugRoute = OwnerSlugRouteImport.update({
   path: '/$owner/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsSecurityPasswordRoute =
+  SettingsSecurityPasswordRouteImport.update({
+    id: '/password',
+    path: '/password',
+    getParentRoute: () => SettingsSecurityRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
   '/dashboard': typeof DashboardRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/import': typeof ImportRoute
+  '/login': typeof LoginRouteWithChildren
   '/management': typeof ManagementRoute
   '/publish-plugin': typeof PublishPluginRoute
   '/publish-skill': typeof PublishSkillRoute
+  '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/stars': typeof StarsRoute
   '/upload': typeof UploadRoute
   '/$owner/$slug': typeof OwnerSlugRoute
   '/cli/auth': typeof CliAuthRoute
+  '/login/password': typeof LoginPasswordRoute
   '/orgs/$handle': typeof OrgsHandleRoute
   '/packages/$name': typeof PackagesNameRoute
   '/packages/new': typeof PackagesNewRoute
   '/plugins/$name': typeof PluginsNameRoute
   '/plugins/new': typeof PluginsNewRoute
+  '/settings/security': typeof SettingsSecurityRouteWithChildren
+  '/settings/password': typeof SettingsPasswordRoute
   '/souls/$slug': typeof SoulsSlugRoute
   '/u/$handle': typeof UHandleRoute
   '/packages/': typeof PackagesIndexRoute
   '/plugins/': typeof PluginsIndexRoute
   '/skills/': typeof SkillsIndexRoute
   '/souls/': typeof SoulsIndexRoute
+  '/settings/security/password': typeof SettingsSecurityPasswordRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
   '/dashboard': typeof DashboardRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/import': typeof ImportRoute
+  '/login': typeof LoginRouteWithChildren
   '/management': typeof ManagementRoute
   '/publish-plugin': typeof PublishPluginRoute
   '/publish-skill': typeof PublishSkillRoute
+  '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/stars': typeof StarsRoute
   '/upload': typeof UploadRoute
   '/$owner/$slug': typeof OwnerSlugRoute
   '/cli/auth': typeof CliAuthRoute
+  '/login/password': typeof LoginPasswordRoute
   '/orgs/$handle': typeof OrgsHandleRoute
   '/packages/$name': typeof PackagesNameRoute
   '/packages/new': typeof PackagesNewRoute
   '/plugins/$name': typeof PluginsNameRoute
   '/plugins/new': typeof PluginsNewRoute
+  '/settings/security': typeof SettingsSecurityRouteWithChildren
+  '/settings/password': typeof SettingsPasswordRoute
   '/souls/$slug': typeof SoulsSlugRoute
   '/u/$handle': typeof UHandleRoute
   '/packages': typeof PackagesIndexRoute
   '/plugins': typeof PluginsIndexRoute
   '/skills': typeof SkillsIndexRoute
   '/souls': typeof SoulsIndexRoute
+  '/settings/security/password': typeof SettingsSecurityPasswordRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
   '/dashboard': typeof DashboardRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/import': typeof ImportRoute
+  '/login': typeof LoginRouteWithChildren
   '/management': typeof ManagementRoute
   '/publish-plugin': typeof PublishPluginRoute
   '/publish-skill': typeof PublishSkillRoute
+  '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/stars': typeof StarsRoute
   '/upload': typeof UploadRoute
   '/$owner/$slug': typeof OwnerSlugRoute
   '/cli/auth': typeof CliAuthRoute
+  '/login/password': typeof LoginPasswordRoute
   '/orgs/$handle': typeof OrgsHandleRoute
   '/packages/$name': typeof PackagesNameRoute
   '/packages/new': typeof PackagesNewRoute
   '/plugins/$name': typeof PluginsNameRoute
   '/plugins/new': typeof PluginsNewRoute
+  '/settings/security': typeof SettingsSecurityRouteWithChildren
+  '/settings_/password': typeof SettingsPasswordRoute
   '/souls/$slug': typeof SoulsSlugRoute
   '/u/$handle': typeof UHandleRoute
   '/packages/': typeof PackagesIndexRoute
   '/plugins/': typeof PluginsIndexRoute
   '/skills/': typeof SkillsIndexRoute
   '/souls/': typeof SoulsIndexRoute
+  '/settings/security/password': typeof SettingsSecurityPasswordRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/about'
     | '/admin'
     | '/dashboard'
+    | '/forgot-password'
     | '/import'
+    | '/login'
     | '/management'
     | '/publish-plugin'
     | '/publish-skill'
+    | '/register'
+    | '/reset-password'
     | '/search'
     | '/settings'
     | '/stars'
     | '/upload'
     | '/$owner/$slug'
     | '/cli/auth'
+    | '/login/password'
     | '/orgs/$handle'
     | '/packages/$name'
     | '/packages/new'
     | '/plugins/$name'
     | '/plugins/new'
+    | '/settings/security'
+    | '/settings/password'
     | '/souls/$slug'
     | '/u/$handle'
     | '/packages/'
     | '/plugins/'
     | '/skills/'
     | '/souls/'
+    | '/settings/security/password'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/about'
     | '/admin'
     | '/dashboard'
+    | '/forgot-password'
     | '/import'
+    | '/login'
     | '/management'
     | '/publish-plugin'
     | '/publish-skill'
+    | '/register'
+    | '/reset-password'
     | '/search'
     | '/settings'
     | '/stars'
     | '/upload'
     | '/$owner/$slug'
     | '/cli/auth'
+    | '/login/password'
     | '/orgs/$handle'
     | '/packages/$name'
     | '/packages/new'
     | '/plugins/$name'
     | '/plugins/new'
+    | '/settings/security'
+    | '/settings/password'
     | '/souls/$slug'
     | '/u/$handle'
     | '/packages'
     | '/plugins'
     | '/skills'
     | '/souls'
+    | '/settings/security/password'
   id:
     | '__root__'
     | '/'
-    | '/about'
     | '/admin'
     | '/dashboard'
+    | '/forgot-password'
     | '/import'
+    | '/login'
     | '/management'
     | '/publish-plugin'
     | '/publish-skill'
+    | '/register'
+    | '/reset-password'
     | '/search'
     | '/settings'
     | '/stars'
     | '/upload'
     | '/$owner/$slug'
     | '/cli/auth'
+    | '/login/password'
     | '/orgs/$handle'
     | '/packages/$name'
     | '/packages/new'
     | '/plugins/$name'
     | '/plugins/new'
+    | '/settings/security'
+    | '/settings_/password'
     | '/souls/$slug'
     | '/u/$handle'
     | '/packages/'
     | '/plugins/'
     | '/skills/'
     | '/souls/'
+    | '/settings/security/password'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AboutRoute: typeof AboutRoute
   AdminRoute: typeof AdminRoute
   DashboardRoute: typeof DashboardRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   ImportRoute: typeof ImportRoute
+  LoginRoute: typeof LoginRouteWithChildren
   ManagementRoute: typeof ManagementRoute
   PublishPluginRoute: typeof PublishPluginRoute
   PublishSkillRoute: typeof PublishSkillRoute
+  RegisterRoute: typeof RegisterRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SearchRoute: typeof SearchRoute
-  SettingsRoute: typeof SettingsRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
   StarsRoute: typeof StarsRoute
   UploadRoute: typeof UploadRoute
   OwnerSlugRoute: typeof OwnerSlugRoute
@@ -347,6 +435,7 @@ export interface RootRouteChildren {
   PackagesNewRoute: typeof PackagesNewRoute
   PluginsNameRoute: typeof PluginsNameRoute
   PluginsNewRoute: typeof PluginsNewRoute
+  SettingsPasswordRoute: typeof SettingsPasswordRoute
   SoulsSlugRoute: typeof SoulsSlugRoute
   UHandleRoute: typeof UHandleRoute
   PackagesIndexRoute: typeof PackagesIndexRoute
@@ -385,6 +474,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SearchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/publish-skill': {
       id: '/publish-skill'
       path: '/publish-skill'
@@ -406,11 +509,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ManagementRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/import': {
       id: '/import'
       path: '/import'
       fullPath: '/import'
       preLoaderRoute: typeof ImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -425,13 +542,6 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/about': {
-      id: '/about'
-      path: '/about'
-      fullPath: '/about'
-      preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -483,6 +593,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SoulsSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings_/password': {
+      id: '/settings_/password'
+      path: '/settings/password'
+      fullPath: '/settings/password'
+      preLoaderRoute: typeof SettingsPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/security': {
+      id: '/settings/security'
+      path: '/security'
+      fullPath: '/settings/security'
+      preLoaderRoute: typeof SettingsSecurityRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/plugins/new': {
       id: '/plugins/new'
       path: '/plugins/new'
@@ -518,6 +642,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrgsHandleRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login/password': {
+      id: '/login/password'
+      path: '/password'
+      fullPath: '/login/password'
+      preLoaderRoute: typeof LoginPasswordRouteImport
+      parentRoute: typeof LoginRoute
+    }
     '/cli/auth': {
       id: '/cli/auth'
       path: '/cli/auth'
@@ -532,20 +663,63 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OwnerSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/security/password': {
+      id: '/settings/security/password'
+      path: '/password'
+      fullPath: '/settings/security/password'
+      preLoaderRoute: typeof SettingsSecurityPasswordRouteImport
+      parentRoute: typeof SettingsSecurityRoute
+    }
   }
 }
 
+interface LoginRouteChildren {
+  LoginPasswordRoute: typeof LoginPasswordRoute
+}
+
+const LoginRouteChildren: LoginRouteChildren = {
+  LoginPasswordRoute: LoginPasswordRoute,
+}
+
+const LoginRouteWithChildren = LoginRoute._addFileChildren(LoginRouteChildren)
+
+interface SettingsSecurityRouteChildren {
+  SettingsSecurityPasswordRoute: typeof SettingsSecurityPasswordRoute
+}
+
+const SettingsSecurityRouteChildren: SettingsSecurityRouteChildren = {
+  SettingsSecurityPasswordRoute: SettingsSecurityPasswordRoute,
+}
+
+const SettingsSecurityRouteWithChildren =
+  SettingsSecurityRoute._addFileChildren(SettingsSecurityRouteChildren)
+
+interface SettingsRouteChildren {
+  SettingsSecurityRoute: typeof SettingsSecurityRouteWithChildren
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsSecurityRoute: SettingsSecurityRouteWithChildren,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AboutRoute: AboutRoute,
   AdminRoute: AdminRoute,
   DashboardRoute: DashboardRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   ImportRoute: ImportRoute,
+  LoginRoute: LoginRouteWithChildren,
   ManagementRoute: ManagementRoute,
   PublishPluginRoute: PublishPluginRoute,
   PublishSkillRoute: PublishSkillRoute,
+  RegisterRoute: RegisterRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SearchRoute: SearchRoute,
-  SettingsRoute: SettingsRoute,
+  SettingsRoute: SettingsRouteWithChildren,
   StarsRoute: StarsRoute,
   UploadRoute: UploadRoute,
   OwnerSlugRoute: OwnerSlugRoute,
@@ -555,6 +729,7 @@ const rootRouteChildren: RootRouteChildren = {
   PackagesNewRoute: PackagesNewRoute,
   PluginsNameRoute: PluginsNameRoute,
   PluginsNewRoute: PluginsNewRoute,
+  SettingsPasswordRoute: SettingsPasswordRoute,
   SoulsSlugRoute: SoulsSlugRoute,
   UHandleRoute: UHandleRoute,
   PackagesIndexRoute: PackagesIndexRoute,

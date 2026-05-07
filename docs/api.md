@@ -15,6 +15,7 @@ OpenAPI: `/api/v1/openapi.json`
 
 - Public read: no token required.
 - Write + account: `Authorization: Bearer clh_...`.
+- CLI tokens are accepted as HTTP Bearer tokens.
 
 ## Rate limits
 
@@ -67,14 +68,25 @@ Public read:
   - Optional filter: `nonSuspiciousOnly=true`
   - Legacy alias: `nonSuspicious=true`
   - With `nonSuspiciousOnly=true`, cursor-based pages may contain fewer than `limit` items; use `nextCursor` to continue.
+- `GET /api/v1/skills?scope=accessible`
+  - Requires Bearer token.
+  - Lists skills the token user can read through direct ownership, publisher membership, direct user grants, or publisher grants.
 - `GET /api/v1/skills/{slug}`
+  - May include `moderation` when a skill is flagged or the owner is viewing it.
+  - `moderation.isSuspicious=true` is a warning signal, not a failed lookup.
+  - `moderation.isMalwareBlocked=true` is a hard block; clients must not install it.
 - `GET /api/v1/skills/{slug}/moderation`
+  - Returns structured moderation details when available.
+  - Public callers can read details for already-flagged visible skills.
 - `GET /api/v1/skills/{slug}/versions?limit=&cursor=`
 - `GET /api/v1/skills/{slug}/versions/{version}`
 - `GET /api/v1/skills/{slug}/scan?version=&tag=`
 - `GET /api/v1/skills/{slug}/file?path=&version=&tag=`
 - `GET /api/v1/resolve?slug=&hash=`
 - `GET /api/v1/download?slug=&version=&tag=`
+  - Enforces malware blocks with an error response.
+  - Suspicious-but-not-malware skills remain downloadable; installer clients should
+    apply their own warning/confirmation policy.
 
 Auth required:
 
@@ -89,6 +101,7 @@ Auth required:
 - `POST /api/v1/skills/{slug}/transfer/cancel`
 - `GET /api/v1/transfers/incoming`
 - `GET /api/v1/transfers/outgoing`
+- `GET /api/v1/me`
 - `GET /api/v1/whoami`
 
 ## Legacy

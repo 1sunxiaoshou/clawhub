@@ -82,7 +82,7 @@ describe("Upload route", () => {
   it("enables publish when fields and files are valid", async () => {
     generateUploadUrl.mockResolvedValue("https://upload.local");
     render(<Upload />);
-    fireEvent.change(screen.getByPlaceholderText("skill-name"), {
+    fireEvent.change(screen.getByPlaceholderText("skill name"), {
       target: { value: "cool-skill" },
     });
     fireEvent.change(screen.getByPlaceholderText("My skill"), {
@@ -99,7 +99,7 @@ describe("Upload route", () => {
     fireEvent.change(input, { target: { files: [file] } });
     fireEvent.click(
       screen.getByRole("checkbox", {
-        name: /i have the rights to this skill and agree to publish it under mit-0/i,
+        name: /i own the rights to this skill and agree to publish it under mit-0/i,
       }),
     );
 
@@ -110,7 +110,7 @@ describe("Upload route", () => {
 
   it("extracts zip uploads and unwraps top-level folders", async () => {
     render(<Upload />);
-    fireEvent.change(screen.getByPlaceholderText("skill-name"), {
+    fireEvent.change(screen.getByPlaceholderText("skill name"), {
       target: { value: "cool-skill" },
     });
     fireEvent.change(screen.getByPlaceholderText("My skill"), {
@@ -134,7 +134,7 @@ describe("Upload route", () => {
     fireEvent.change(input, { target: { files: [zipFile] } });
     fireEvent.click(
       screen.getByRole("checkbox", {
-        name: /i have the rights to this skill and agree to publish it under mit-0/i,
+        name: /i own the rights to this skill and agree to publish it under mit-0/i,
       }),
     );
 
@@ -147,7 +147,7 @@ describe("Upload route", () => {
     generateUploadUrl.mockResolvedValue("https://upload.local");
     publishVersion.mockResolvedValue(undefined);
     render(<Upload />);
-    fireEvent.change(screen.getByPlaceholderText("skill-name"), {
+    fireEvent.change(screen.getByPlaceholderText("skill name"), {
       target: { value: "ynab" },
     });
     fireEvent.change(screen.getByPlaceholderText("My skill"), {
@@ -167,7 +167,7 @@ describe("Upload route", () => {
     fireEvent.change(input, { target: { files: [file] } });
     fireEvent.click(
       screen.getByRole("checkbox", {
-        name: /i have the rights to this skill and agree to publish it under mit-0/i,
+        name: /i own the rights to this skill and agree to publish it under mit-0/i,
       }),
     );
 
@@ -188,9 +188,35 @@ describe("Upload route", () => {
     expect(args?.files?.[0]?.path).toBe("SKILL.md");
   });
 
+  it("auto-fills metadata from uploaded SKILL.md frontmatter", async () => {
+    render(<Upload />);
+
+    const skill = new File(
+      [
+        "---\nname: Weather Wizard\nversion: 2.3.4\n---\n# Weather Wizard\nDoes weather things.\n",
+      ],
+      "SKILL.md",
+      { type: "text/markdown" },
+    );
+    Object.defineProperty(skill, "webkitRelativePath", { value: "weather-wizard/SKILL.md" });
+
+    const input = screen.getByTestId("upload-input") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [skill] } });
+
+    await waitFor(() => {
+      expect((screen.getByPlaceholderText("skill name") as HTMLInputElement).value).toBe(
+        "weather-wizard",
+      );
+      expect((screen.getByPlaceholderText("My skill") as HTMLInputElement).value).toBe(
+        "Weather Wizard",
+      );
+      expect((screen.getByPlaceholderText("1.0.0") as HTMLInputElement).value).toBe("2.3.4");
+    });
+  });
+
   it("blocks non-text folder uploads (png)", async () => {
     render(<Upload />);
-    fireEvent.change(screen.getByPlaceholderText("skill-name"), {
+    fireEvent.change(screen.getByPlaceholderText("skill name"), {
       target: { value: "cool-skill" },
     });
     fireEvent.change(screen.getByPlaceholderText("My skill"), {
@@ -212,13 +238,13 @@ describe("Upload route", () => {
 
     expect(await screen.findByText("screenshot.png")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /publish/i }));
-    expect(await screen.findByText(/Remove non-text files: screenshot\.png/i)).toBeTruthy();
+    expect(await screen.findByText(/Please remove these non-text files: screenshot\.png/i)).toBeTruthy();
     expect(screen.getByText("screenshot.png")).toBeTruthy();
   });
 
   it("shows a validation error when a skill file exceeds 10MB", async () => {
     render(<Upload />);
-    fireEvent.change(screen.getByPlaceholderText("skill-name"), {
+    fireEvent.change(screen.getByPlaceholderText("skill name"), {
       target: { value: "cool-skill" },
     });
     fireEvent.change(screen.getByPlaceholderText("My skill"), {
@@ -241,7 +267,7 @@ describe("Upload route", () => {
     const input = screen.getByTestId("upload-input") as HTMLInputElement;
     fireEvent.change(input, { target: { files: [skill, huge] } });
 
-    expect(await screen.findByText(/Each file must be 10MB or smaller: notes\.md/i)).toBeTruthy();
+    expect(await screen.findByText(/Single files cannot exceed 10MB: notes\.md/i)).toBeTruthy();
     expect(
       screen.getByRole("button", { name: /publish skill/i }).getAttribute("disabled"),
     ).not.toBeNull();
@@ -249,7 +275,7 @@ describe("Upload route", () => {
 
   it("shows an informational note when mac junk files are ignored", async () => {
     render(<Upload />);
-    fireEvent.change(screen.getByPlaceholderText("skill-name"), {
+    fireEvent.change(screen.getByPlaceholderText("skill name"), {
       target: { value: "cool-skill" },
     });
     fireEvent.change(screen.getByPlaceholderText("My skill"), {
@@ -268,7 +294,7 @@ describe("Upload route", () => {
     fireEvent.change(input, { target: { files: [skill, junk] } });
     fireEvent.click(
       screen.getByRole("checkbox", {
-        name: /i have the rights to this skill and agree to publish it under mit-0/i,
+        name: /i own the rights to this skill and agree to publish it under mit-0/i,
       }),
     );
 
@@ -282,7 +308,7 @@ describe("Upload route", () => {
     publishVersion.mockRejectedValueOnce(new Error("Changelog is required"));
     generateUploadUrl.mockResolvedValue("https://upload.local");
     render(<Upload />);
-    fireEvent.change(screen.getByPlaceholderText("skill-name"), {
+    fireEvent.change(screen.getByPlaceholderText("skill name"), {
       target: { value: "cool-skill" },
     });
     fireEvent.change(screen.getByPlaceholderText("My skill"), {
@@ -294,7 +320,7 @@ describe("Upload route", () => {
     fireEvent.change(screen.getByPlaceholderText("latest, stable"), {
       target: { value: "latest" },
     });
-    fireEvent.change(screen.getByPlaceholderText("Describe what changed in this skill..."), {
+    fireEvent.change(screen.getByPlaceholderText("Describe changes in this skill..."), {
       target: { value: "Initial drop." },
     });
     const file = new File(["hello"], "SKILL.md", { type: "text/markdown" });
@@ -302,7 +328,7 @@ describe("Upload route", () => {
     fireEvent.change(input, { target: { files: [file] } });
     fireEvent.click(
       screen.getByRole("checkbox", {
-        name: /i have the rights to this skill and agree to publish it under mit-0/i,
+        name: /i own the rights to this skill and agree to publish it under mit-0/i,
       }),
     );
     const publishButton = screen.getByRole("button", { name: /publish/i }) as HTMLButtonElement;
@@ -331,7 +357,7 @@ describe("Upload route", () => {
     });
 
     render(<Upload />);
-    fireEvent.change(screen.getByPlaceholderText("skill-name"), {
+    fireEvent.change(screen.getByPlaceholderText("skill name"), {
       target: { value: "taken-skill" },
     });
     fireEvent.change(screen.getByPlaceholderText("My skill"), {
@@ -343,7 +369,7 @@ describe("Upload route", () => {
     fireEvent.change(screen.getByPlaceholderText("latest, stable"), {
       target: { value: "latest" },
     });
-    fireEvent.change(screen.getByPlaceholderText("Describe what changed in this skill..."), {
+    fireEvent.change(screen.getByPlaceholderText("Describe changes in this skill..."), {
       target: { value: "Initial drop." },
     });
     const file = new File(["hello"], "SKILL.md", { type: "text/markdown" });

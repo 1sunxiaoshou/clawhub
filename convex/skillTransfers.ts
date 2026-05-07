@@ -208,6 +208,19 @@ export const acceptTransferInternal = internalMutation({
       },
       createdAt: now,
     });
+    await ctx.db.insert("auditLogs", {
+      actorUserId: args.actorUserId,
+      action: "skill.owner.change",
+      targetType: "skill",
+      targetId: skill._id,
+      metadata: {
+        from: transfer.fromUserId,
+        to: args.actorUserId,
+        transferId: transfer._id,
+        ownerPublisherId: newPublisher._id,
+      },
+      createdAt: now,
+    });
 
     return { ok: true as const, skillSlug: skill.slug };
   },

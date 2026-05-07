@@ -447,6 +447,50 @@ export const listMine = query({
   },
 });
 
+export const listForUserInternal = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user || user.deletedAt || user.deactivatedAt) return [];
+    const memberships = await ctx.db
+      .query("publisherMembers")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    const publishers = await Promise.all(
+      memberships.map(async (membership) => {
+        const publisher = await ctx.db.get(membership.publisherId);
+        const publicPublisher = toPublicPublisher(publisher);
+        if (!publicPublisher) return null;
+        return {
+          publisher: publicPublisher,
+          role: membership.role,
+        };
+      }),
+    );
+    const visiblePublishers = publishers.filter(
+      (
+        item,
+      ): item is {
+        publisher: NonNullable<ReturnType<typeof toPublicPublisher>>;
+        role: Doc<"publisherMembers">["role"];
+      } => Boolean(item),
+    );
+    const personalPublisher = toPublicPublisher(
+      await getPersonalPublisherForUserOrFallback(ctx, user),
+    );
+    if (
+      personalPublisher &&
+      !visiblePublishers.some((entry) => entry.publisher._id === personalPublisher._id)
+    ) {
+      visiblePublishers.unshift({
+        publisher: personalPublisher,
+        role: "owner",
+      });
+    }
+    return visiblePublishers;
+  },
+});
+
 export const getByHandle = query({
   args: { handle: v.string() },
   handler: async (ctx, args) => toPublicPublisher(await getPublisherByHandle(ctx, args.handle)),
@@ -536,6 +580,59 @@ export const createOrg = mutation({
       publisher: toPublicPublisher(await ctx.db.get(publisherId)),
       role: "owner" as const,
     };
+  },
+});
+
+export const deleteOrg = mutation({
+  args: { publisherId: v.id("publishers") },
+  handler: async (ctx, args) => {
+    const { userId } = await requireUser(ctx);
+    const publisher = await ctx.db.get(args.publisherId);
+    if (!publisher || publisher.deletedAt || publisher.deactivatedAt || publisher.kind !== "org") {
+      throw new ConvexError("Organization not found");
+    }
+
+    const membership = await getPublisherMembership(ctx, publisher._id, userId);
+    if (!membership || membership.role !== "owner") {
+      throw new ConvexError("Only org owners can delete an organization");
+    }
+
+    const [skill, pkg, soul] = await Promise.all([
+      ctx.db
+        .query("skills")
+        .withIndex("by_owner_publisher", (q) => q.eq("ownerPublisherId", publisher._id))
+        .first(),
+      ctx.db
+        .query("packages")
+        .withIndex("by_owner_publisher", (q) => q.eq("ownerPublisherId", publisher._id))
+        .first(),
+      ctx.db
+        .query("souls")
+        .withIndex("by_owner_publisher", (q) => q.eq("ownerPublisherId", publisher._id))
+        .first(),
+    ]);
+    if (skill || pkg || soul) {
+      throw new ConvexError("Organizations with published content cannot be deleted");
+    }
+
+    const now = Date.now();
+    const members = await ctx.db
+      .query("publisherMembers")
+      .withIndex("by_publisher", (q) => q.eq("publisherId", publisher._id))
+      .collect();
+    for (const member of members) {
+      await ctx.db.delete(member._id);
+    }
+    await ctx.db.patch(publisher._id, { deletedAt: now, updatedAt: now });
+    await ctx.db.insert("auditLogs", {
+      actorUserId: userId,
+      action: "publisher.delete",
+      targetType: "publisher",
+      targetId: publisher._id,
+      metadata: { kind: "org", handle: publisher.handle },
+      createdAt: now,
+    });
+    return { ok: true };
   },
 });
 

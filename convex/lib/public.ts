@@ -1,5 +1,5 @@
 import type { Doc } from "../_generated/dataModel";
-import { isPublicSkillDoc } from "./globalStats";
+import { canListSkillPublicly } from "./skillPolicy";
 
 export type PublicUser = Pick<
   Doc<"users">,
@@ -25,6 +25,7 @@ export type PublicSkill = Pick<
   | "latestVersionId"
   | "tags"
   | "capabilityTags"
+  | "visibility"
   | "badges"
   | "stats"
   | "createdAt"
@@ -52,6 +53,7 @@ export type HydratableSkill = Pick<
   | "latestVersionSummary"
   | "tags"
   | "capabilityTags"
+  | "visibility"
   | "badges"
   | "stats"
   | "statsDownloads"
@@ -113,7 +115,7 @@ export function toPublicPublisher(
 
 export function toPublicSkill(skill: HydratableSkill | null | undefined): PublicSkill | null {
   if (!skill) return null;
-  if (!isPublicSkillDoc(skill)) return null;
+  if (!canListSkillPublicly(skill)) return null;
   const stats = {
     downloads:
       typeof skill.statsDownloads === "number"
@@ -144,6 +146,7 @@ export function toPublicSkill(skill: HydratableSkill | null | undefined): Public
     latestVersionId: skill.latestVersionId,
     tags: skill.tags,
     capabilityTags: skill.capabilityTags,
+    visibility: skill.visibility,
     badges: skill.badges,
     stats,
     createdAt: skill.createdAt,

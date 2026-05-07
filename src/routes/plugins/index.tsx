@@ -9,6 +9,7 @@ import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { formatRetryDelay } from "../../lib/formatRetryDelay";
+import { useI18n } from "../../lib/i18n";
 import {
   fetchPluginCatalog,
   isRateLimitedPackageApiError,
@@ -79,6 +80,8 @@ export const Route = createFileRoute("/plugins/")({
 });
 
 function VerifiedBadge() {
+  const { locale } = useI18n();
+  const label = locale === "zh-CN" ? "已验证发布者" : "Verified publisher";
   return (
     <svg
       width="16"
@@ -86,7 +89,7 @@ function VerifiedBadge() {
       viewBox="0 0 16 16"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      aria-label="Verified publisher"
+      aria-label={label}
       className="inline-block shrink-0 align-middle"
     >
       <path
@@ -105,6 +108,7 @@ function VerifiedBadge() {
 }
 
 export function PluginsIndex() {
+  const { locale } = useI18n();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const { items, nextCursor, rateLimited, retryAfterSeconds } =
@@ -115,12 +119,65 @@ export function PluginsIndex() {
     setQuery(search.q ?? "");
   }, [search.q]);
 
+  const text =
+    locale === "zh-CN"
+      ? {
+          title: "插件",
+          description: "浏览插件目录。",
+          searchPlaceholder: "搜索插件...",
+          publishPlugin: "发布插件",
+          filterByType: "按类型筛选",
+          all: "全部",
+          code: "代码插件",
+          bundles: "插件包",
+          verified: "已验证",
+          executesCode: "会执行代码",
+          rateLimitedTitle: "插件目录暂时不可用",
+          rateLimitedDescription: `公共插件 API 当前触发了限流。请${formatRetryDelay(
+            retryAfterSeconds,
+          )}后重试。`,
+          tryAgain: "重试",
+          emptyTitle: "没有匹配该筛选条件的插件",
+          emptyDescription: "试试其他搜索词或筛选条件。",
+          noSummary: "未提供摘要。",
+          by: "作者",
+          community: "社区",
+          firstPage: "第一页",
+          nextPage: "下一页",
+        }
+      : {
+          title: "Plugins",
+          description: "Browse the plugin catalog.",
+          searchPlaceholder: "Search plugins...",
+          publishPlugin: "Publish Plugin",
+          filterByType: "Filter by type",
+          all: "All",
+          code: "Code",
+          bundles: "Bundles",
+          verified: "Verified",
+          executesCode: "Executes code",
+          rateLimitedTitle: "Plugin catalog is temporarily unavailable",
+          rateLimitedDescription: `The public plugin API is rate-limited right now. Try again ${formatRetryDelay(
+            retryAfterSeconds,
+          )}.`,
+          tryAgain: "Try again",
+          emptyTitle: "No plugins match that filter",
+          emptyDescription: "Try a different search or filter.",
+          noSummary: "No summary provided.",
+          by: "by",
+          community: "community",
+          firstPage: "First page",
+          nextPage: "Next page",
+        };
+
   return (
     <main className="py-10">
       <Container size="wide">
         <header className="mb-6">
-          <h1 className="font-display text-2xl font-bold text-[color:var(--ink)] mb-2">Plugins</h1>
-          <p className="text-sm text-[color:var(--ink-soft)]">Browse the plugin catalog.</p>
+          <h1 className="font-display text-2xl font-bold text-[color:var(--ink)] mb-2">
+            {text.title}
+          </h1>
+          <p className="text-sm text-[color:var(--ink-soft)]">{text.description}</p>
         </header>
 
         <div className="flex flex-col gap-3">
@@ -144,7 +201,7 @@ export function PluginsIndex() {
               />
               <Input
                 className="pl-9"
-                placeholder="Search plugins..."
+                placeholder={text.searchPlaceholder}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
@@ -161,19 +218,19 @@ export function PluginsIndex() {
               }}
               className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold text-sm min-h-[44px] rounded-[var(--radius-pill)] px-4 py-[11px] border-none bg-gradient-to-br from-[color:var(--accent)] to-[color:var(--accent-deep)] text-white transition-all duration-200 no-underline hover:-translate-y-px hover:shadow-[0_10px_20px_rgba(29,26,23,0.12)]"
             >
-              Publish Plugin
+              {text.publishPlugin}
             </Link>
           </div>
           <div className="flex flex-wrap items-stretch gap-2">
             <div
               className="flex min-w-0 flex-wrap items-center rounded-[var(--radius-pill)] border border-[color:var(--line)]"
               role="group"
-              aria-label="Filter by type"
+              aria-label={text.filterByType}
             >
               {[
-                { value: undefined, label: "All" },
-                { value: "code-plugin" as const, label: "Code" },
-                { value: "bundle-plugin" as const, label: "Bundles" },
+                { value: undefined, label: text.all },
+                { value: "code-plugin" as const, label: text.code },
+                { value: "bundle-plugin" as const, label: text.bundles },
               ].map((opt) => (
                 <button
                   key={opt.label}
@@ -215,7 +272,7 @@ export function PluginsIndex() {
                 });
               }}
             >
-              <VerifiedBadge /> Verified
+              <VerifiedBadge /> {text.verified}
             </Button>
             <Button
               variant={search.executesCode ? "primary" : "outline"}
@@ -233,7 +290,7 @@ export function PluginsIndex() {
                 });
               }}
             >
-              Executes code
+              {text.executesCode}
             </Button>
           </div>
         </div>
@@ -242,19 +299,17 @@ export function PluginsIndex() {
           {rateLimited ? (
             <EmptyState
               icon={AlertTriangle}
-              title="Plugin catalog is temporarily unavailable"
-              description={`The public plugin API is rate-limited right now. Try again ${formatRetryDelay(
-                retryAfterSeconds,
-              )}.`}
+              title={text.rateLimitedTitle}
+              description={text.rateLimitedDescription}
               action={{
-                label: "Try again",
+                label: text.tryAgain,
                 onClick: () => window.location.reload(),
               }}
             />
           ) : items.length === 0 ? (
             <EmptyState
-              title="No plugins match that filter"
-              description="Try a different search or filter."
+              title={text.emptyTitle}
+              description={text.emptyDescription}
             />
           ) : (
             <>
@@ -274,11 +329,13 @@ export function PluginsIndex() {
                         {item.displayName}
                       </h3>
                       <p className="text-sm text-[color:var(--ink-soft)]">
-                        {item.summary ?? "No summary provided."}
+                        {item.summary ?? text.noSummary}
                       </p>
                       <div className="flex flex-col gap-1.5 pt-2 sm:flex-row sm:items-center sm:justify-between">
                         <span className="min-w-0 break-words text-sm text-[color:var(--ink-soft)]">
-                          {item.ownerHandle ? `by ${item.ownerHandle}` : "community"}
+                          {item.ownerHandle
+                            ? `${text.by} ${item.ownerHandle}`
+                            : text.community}
                         </span>
                         {item.latestVersion ? (
                           <span className="text-sm text-[color:var(--ink-soft)]">
@@ -305,7 +362,7 @@ export function PluginsIndex() {
                         });
                       }}
                     >
-                      First page
+                      {text.firstPage}
                     </Button>
                   ) : null}
                   {nextCursor ? (
@@ -321,7 +378,7 @@ export function PluginsIndex() {
                         });
                       }}
                     >
-                      Next page
+                      {text.nextPage}
                     </Button>
                   ) : null}
                 </div>

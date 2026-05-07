@@ -103,16 +103,19 @@ Notes:
 Query params:
 
 - `limit` (optional): integer (1–200)
-- `cursor` (optional): pagination cursor for any non-`trending` sort
-- `sort` (optional): `updated` (default), `downloads`, `stars` (alias: `rating`), `installsCurrent` (alias: `installs`), `installsAllTime`, `trending`
+- `cursor` (optional): pagination cursor
+- `sort` (optional): `updated` (default), `newest`, `downloads`, `stars` (alias: `rating`), `installs`, `name`
+- `scope` (optional): `accessible` or `mine` to list skills readable by the Bearer token user
 - `nonSuspiciousOnly` (optional): `true` to hide suspicious (`flagged.suspicious`) skills
 - `nonSuspicious` (optional): legacy alias for `nonSuspiciousOnly`
 
 Notes:
 
-- `trending` ranks by installs in the last 7 days (telemetry-based).
-- When `nonSuspiciousOnly=true`, cursor-based sorts may return fewer than `limit` items on a page because suspicious skills are filtered after page retrieval.
+- Legacy sort aliases `installsCurrent`, `installsAllTime`, and `trending` are accepted and map to `installs`.
 - Use `nextCursor` to continue pagination when present. A short page does not by itself mean end-of-results.
+- `scope=accessible` and `scope=mine` require `Authorization: Bearer clh_...`. The token may be a CLI token.
+- Accessible scoped results include skills the token user can read through direct ownership, publisher membership, direct user grants, or publisher grants. This is intended for external apps that need the same private/restricted visibility as the CLI.
+- Scoped results are returned newest-updated first and currently return `nextCursor: null`.
 
 Response:
 
@@ -172,6 +175,11 @@ Notes:
 - `metadata.systems`: Nix system targets (e.g. `["aarch64-darwin", "x86_64-linux"]`). `null` if not declared.
 - `metadata` is `null` if the skill has no platform metadata.
 - `moderation` is included only when the skill is flagged or the owner is viewing it.
+- `moderation.isSuspicious=true` is a warning signal, not an API failure. Third-party
+  installers should surface a warning or require their own confirmation policy, but
+  they should not treat the detail response itself as failed.
+- `moderation.isMalwareBlocked=true` means the skill is malicious/blocked and must not
+  be installed. `/api/v1/download` also enforces this and returns an error.
 
 ### `GET /api/v1/skills/{slug}/moderation`
 
@@ -209,6 +217,9 @@ Notes:
 - Owners and staff can access moderation details for hidden skills.
 - Public callers only get `200` for already-flagged visible skills.
 - Evidence is redacted for public callers and only includes raw snippets for owners/staff.
+- A `suspicious` verdict means the skill is still visible/downloadable unless another
+  moderation state blocks it. A `malicious` verdict or `isMalwareBlocked=true` is the
+  hard block.
 
 ### `GET /api/v1/skills/{slug}/versions`
 
@@ -403,6 +414,10 @@ Notes:
 
 - If neither `version` nor `tag` is provided, the latest version is used.
 - Soft-deleted versions return `410`.
+- Malware-blocked skills return `403` and must not be installed.
+- Suspicious-but-not-malware skills are still downloadable. Clients that automate
+  installation should decide whether to warn, prompt, require a force flag, or skip
+  them according to their own policy.
 - Download stats are counted as unique identities per hour (`userId` when API token is valid, otherwise IP).
 
 ## Auth endpoints (Bearer token)
@@ -413,9 +428,39 @@ All endpoints require:
 Authorization: Bearer clh_...
 ```
 
+CLI tokens use the same Bearer token authentication on HTTP endpoints. Other apps can pass a CLI token directly in the `Authorization` header to identify the user and access skill read APIs permitted for that user.
+
+### `GET /api/v1/me`
+
+Validates token and returns the user plus publisher memberships visible to the token user.
+
+Response:
+
+```json
+{
+  "user": {
+    "id": "users:...",
+    "handle": "peter",
+    "role": "user",
+    "displayName": "Peter",
+    "image": null
+  },
+  "publishers": [
+    {
+      "id": "publishers:...",
+      "handle": "team",
+      "displayName": "Team",
+      "image": null,
+      "kind": "org",
+      "role": "owner"
+    }
+  ]
+}
+```
+
 ### `GET /api/v1/whoami`
 
-Validates token and returns the user handle.
+Legacy alias for `GET /api/v1/me`.
 
 ### `POST /api/v1/skills`
 

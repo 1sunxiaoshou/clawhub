@@ -253,13 +253,17 @@ describe("skill route loader", () => {
     );
     expect(head?.meta).toEqual(
       expect.arrayContaining([
-        { title: "Weather — ClawHub" },
+        { title: "Weather — Deep Skill Hub" },
         { name: "description", content: "Get current weather." },
+        { property: "og:title", content: "Weather — Deep Skill Hub" },
+        { property: "og:description", content: "Get current weather." },
         { property: "og:url", content: "https://clawhub.ai/steipete/weather" },
         {
           property: "og:image",
           content: "https://clawhub.ai/og/skill.png?v=5&slug=weather&owner=steipete&version=1.0.0",
         },
+        { name: "twitter:title", content: "Weather — Deep Skill Hub" },
+        { name: "twitter:description", content: "Get current weather." },
         {
           name: "twitter:image",
           content: "https://clawhub.ai/og/skill.png?v=5&slug=weather&owner=steipete&version=1.0.0",
@@ -277,7 +281,7 @@ describe("skill route loader", () => {
         },
       ],
       meta: expect.arrayContaining([
-        { title: "weather — ClawHub" },
+        { title: "weather — Deep Skill Hub" },
         { property: "og:url", content: "https://clawhub.ai/steipete/weather" },
       ]),
     });

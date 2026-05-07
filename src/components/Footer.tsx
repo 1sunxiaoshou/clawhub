@@ -1,21 +1,37 @@
+import { useLocation } from "@tanstack/react-router";
+import { isAuthPath } from "../auth/isAuthPath";
+import { useI18n } from "../lib/i18n";
 import { getSiteName } from "../lib/site";
-import { Separator } from "./ui/separator";
+import { Container } from "./layout/Container";
 
 export function Footer() {
   const siteName = getSiteName();
+  const { t } = useI18n();
+  const location = useLocation();
+  const isHomePage = location.pathname === "/";
+  const isAuthPage = isAuthPath(location.pathname);
+
+  if (isAuthPage) return null;
+
   return (
-    <footer className="mt-auto px-7 pb-8 pt-12">
-      <div className="mx-auto max-w-[1200px]">
-        <Separator className="mb-6" />
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.82rem] text-[color:var(--ink-soft)]">
+    <footer
+      className={
+        isHomePage ? 'fixed inset-x-0 bottom-0 z-20 pb-5 pt-4 bg-transparent' : 'mt-auto pb-8 pt-12'
+      }
+    >
+      <Container>
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[0.82rem] text-[color:var(--ink-soft)]">
           <span className="font-semibold text-[color:var(--ink)]">{siteName}</span>
+          <FooterLink href="https://clawhub.ai">ClawHub</FooterLink>
           <FooterLink href="https://openclaw.ai">OpenClaw</FooterLink>
           <FooterLink href="https://vercel.com">Vercel</FooterLink>
           <FooterLink href="https://www.convex.dev">Convex</FooterLink>
-          <FooterLink href="https://github.com/openclaw/clawhub">Open source (MIT)</FooterLink>
+          <FooterLink href="https://github.com/openclaw/clawhub">
+            {t('footer.opensource')} (MIT)
+          </FooterLink>
           <FooterLink href="https://steipete.me">Peter Steinberger</FooterLink>
         </div>
-      </div>
+      </Container>
     </footer>
   );
 }

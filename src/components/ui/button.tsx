@@ -39,7 +39,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           variant === "default" &&
             "border border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--ink)]",
           variant === "primary" &&
-            "border-none bg-gradient-to-br from-[color:var(--accent)] to-[color:var(--accent-deep)] text-white dark:from-[#c35640] dark:to-[#953827] dark:shadow-[0_10px_22px_rgba(58,23,16,0.42),inset_0_1px_0_rgba(255,201,184,0.18)]",
+            "border-none bg-gradient-to-br from-[color:var(--accent)] to-[color:var(--accent-deep)] text-white dark:from-[#60a5fa] dark:to-[#2563eb] dark:shadow-[0_10px_22px_rgba(15,23,42,0.42),inset_0_1px_0_rgba(191,219,254,0.18)]",
           variant === "destructive" &&
             "border border-red-300/40 bg-red-50 text-red-700 hover:not-disabled:bg-red-100 dark:border-red-500/30 dark:bg-red-950/50 dark:text-red-300",
           variant === "ghost" &&

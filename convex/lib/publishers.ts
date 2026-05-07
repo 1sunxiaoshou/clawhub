@@ -68,6 +68,32 @@ export function isPublisherActive(
   return Boolean(publisher && !publisher.deletedAt && !publisher.deactivatedAt);
 }
 
+function hasPublisherChanged(
+  publisher: Doc<"publishers">,
+  next: Pick<
+    Doc<"publishers">,
+    | "handle"
+    | "displayName"
+    | "bio"
+    | "image"
+    | "linkedUserId"
+    | "trustedPublisher"
+    | "deletedAt"
+    | "deactivatedAt"
+  >,
+) {
+  return (
+    publisher.handle !== next.handle ||
+    publisher.displayName !== next.displayName ||
+    publisher.bio !== next.bio ||
+    publisher.image !== next.image ||
+    publisher.linkedUserId !== next.linkedUserId ||
+    publisher.trustedPublisher !== next.trustedPublisher ||
+    publisher.deletedAt !== next.deletedAt ||
+    publisher.deactivatedAt !== next.deactivatedAt
+  );
+}
+
 export function isPublisherRoleAllowed(role: PublisherRole, allowed: PublisherRole[]) {
   const ranks: Record<PublisherRole, number> = {
     publisher: 1,
@@ -160,7 +186,7 @@ export async function ensurePersonalPublisherForUser(
       throw new ConvexError(`Publisher handle "@${handle}" is already claimed`);
     }
     try {
-      await ctx.db.patch(existingPublisher._id, {
+      const nextPublisher = {
         handle,
         displayName: user.displayName?.trim() || user.name?.trim() || handle,
         bio: user.bio?.trim() || undefined,
@@ -169,8 +195,13 @@ export async function ensurePersonalPublisherForUser(
         trustedPublisher: user.trustedPublisher,
         deletedAt: undefined,
         deactivatedAt: undefined,
-        updatedAt: now,
-      });
+      };
+      if (hasPublisherChanged(existingPublisher, nextPublisher)) {
+        await ctx.db.patch(existingPublisher._id, {
+          ...nextPublisher,
+          updatedAt: now,
+        });
+      }
       if (user.personalPublisherId !== existingPublisher._id) {
         await ctx.db.patch(user._id, {
           personalPublisherId: existingPublisher._id,
@@ -221,7 +252,7 @@ export async function ensurePersonalPublisherForUser(
       }));
 
     if (conflict) {
-      await ctx.db.patch(conflict._id, {
+      const nextPublisher = {
         displayName: user.displayName?.trim() || user.name?.trim() || handle,
         bio: user.bio?.trim() || undefined,
         image: user.image,
@@ -229,8 +260,13 @@ export async function ensurePersonalPublisherForUser(
         trustedPublisher: user.trustedPublisher,
         deletedAt: undefined,
         deactivatedAt: undefined,
-        updatedAt: now,
-      });
+      };
+      if (hasPublisherChanged(conflict, { ...nextPublisher, handle: conflict.handle })) {
+        await ctx.db.patch(conflict._id, {
+          ...nextPublisher,
+          updatedAt: now,
+        });
+      }
     }
 
     const existingMember = await ctx.db

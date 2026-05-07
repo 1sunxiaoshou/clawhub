@@ -1,9 +1,11 @@
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
 import { httpAction, internalMutation } from "./functions";
 import { getOptionalApiTokenUserId } from "./lib/apiTokenAuth";
 import { corsHeaders, mergeHeaders } from "./lib/httpHeaders";
 import { applyRateLimit, getClientIp } from "./lib/httpRateLimit";
+import { allowSkillPolicyDecision, canDownloadSkill } from "./lib/skillPolicy";
 import { buildDeterministicZip } from "./lib/skillZip";
 import { hashToken } from "./lib/tokens";
 import { insertStatEvent } from "./skillStatEvents";
@@ -12,6 +14,19 @@ const HOUR_MS = 3_600_000;
 const DEDUPE_RETENTION_MS = 7 * 24 * HOUR_MS;
 const PRUNE_BATCH_SIZE = 200;
 const PRUNE_MAX_BATCHES = 50;
+
+type DownloadSkill = {
+  _id: Id<"skills">;
+  ownerUserId: Id<"users">;
+  slug: string;
+  latestVersionId?: Id<"skillVersions">;
+  tags: Record<string, Id<"skillVersions">>;
+};
+
+type DownloadPolicySkill = Pick<
+  Doc<"skills">,
+  "moderationStatus" | "moderationReason" | "moderationFlags"
+>;
 
 export async function downloadZipHandler(
   ctx: Parameters<Parameters<typeof httpAction>[0]>[0],
@@ -33,47 +48,43 @@ export async function downloadZipHandler(
   if (!rate.ok) return rate.response;
 
   const skillResult = await ctx.runQuery(api.skills.getBySlug, { slug });
-  if (!skillResult?.skill) {
+  let skill: DownloadSkill | null | undefined = skillResult?.skill;
+  let policySkill: DownloadPolicySkill | null = skill
+    ? await ctx.runQuery(internal.skills.getSkillBySlugInternal, { slug })
+    : null;
+  if (!skill) {
+    const userId = await getOptionalApiTokenUserId(ctx, request);
+    const internalSkill = userId
+      ? await ctx.runQuery(internal.skills.getSkillBySlugInternal, { slug })
+      : null;
+    const canRead =
+      internalSkill && userId
+        ? await ctx.runQuery(internal.skills.canReadSkillInternal, {
+            skillId: internalSkill._id,
+            userId,
+          })
+        : false;
+    if (canRead) {
+      const readableSkill = internalSkill!;
+      skill = readableSkill;
+      policySkill = readableSkill;
+    }
+  }
+  if (!skill) {
     return new Response("Skill not found", {
       status: 404,
       headers: mergeHeaders(rate.headers, corsHeaders()),
     });
   }
 
-  // Block downloads based on moderation status.
-  const mod = skillResult.moderationInfo;
-  if (mod?.isMalwareBlocked) {
-    return new Response(
-      "Blocked: this skill has been flagged as malicious by VirusTotal and cannot be downloaded.",
-      {
-        status: 403,
-        headers: mergeHeaders(rate.headers, corsHeaders()),
-      },
-    );
-  }
-  if (mod?.isPendingScan) {
-    return new Response(
-      "This skill is pending a security scan by VirusTotal. Please try again in a few minutes.",
-      {
-        status: 423,
-        headers: mergeHeaders(rate.headers, corsHeaders()),
-      },
-    );
-  }
-  if (mod?.isRemoved) {
-    return new Response("This skill has been removed by a moderator.", {
-      status: 410,
-      headers: mergeHeaders(rate.headers, corsHeaders()),
-    });
-  }
-  if (mod?.isHiddenByMod) {
-    return new Response("This skill is currently unavailable.", {
-      status: 403,
+  const downloadDecision = policySkill ? canDownloadSkill(policySkill) : allowSkillPolicyDecision();
+  if (!downloadDecision.allowed) {
+    return new Response(downloadDecision.message, {
+      status: downloadDecision.status,
       headers: mergeHeaders(rate.headers, corsHeaders()),
     });
   }
 
-  const skill = skillResult.skill;
   let version = skill.latestVersionId
     ? await ctx.runQuery(internal.skills.getVersionByIdInternal, {
         versionId: skill.latestVersionId,

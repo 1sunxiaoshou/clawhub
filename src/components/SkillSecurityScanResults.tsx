@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useI18n } from "../lib/i18n";
 
 type LlmAnalysisDimension = {
   name: string;
@@ -7,14 +8,25 @@ type LlmAnalysisDimension = {
   detail: string;
 };
 
-const SKILL_CAPABILITY_LABELS: Record<string, string> = {
-  crypto: "Crypto",
-  "requires-wallet": "Requires wallet",
-  "can-make-purchases": "Can make purchases",
-  "can-sign-transactions": "Can sign transactions",
-  "requires-oauth-token": "Requires OAuth token",
-  "posts-externally": "Posts externally",
-};
+function getCapabilityLabels(locale: "zh-CN" | "en"): Record<string, string> {
+  return locale === "zh-CN"
+    ? {
+        crypto: "加密货币",
+        "requires-wallet": "需要钱包",
+        "can-make-purchases": "可发起购买",
+        "can-sign-transactions": "可签署交易",
+        "requires-oauth-token": "需要 OAuth token",
+        "posts-externally": "会向外部发布",
+      }
+    : {
+        crypto: "Crypto",
+        "requires-wallet": "Requires wallet",
+        "can-make-purchases": "Can make purchases",
+        "can-sign-transactions": "Can sign transactions",
+        "requires-oauth-token": "Requires OAuth token",
+        "posts-externally": "Posts externally",
+      };
+}
 
 export type VtAnalysis = {
   status: string;
@@ -125,6 +137,23 @@ function getScanStatusInfo(status: string) {
   }
 }
 
+function getLocalizedScanStatusInfo(status: string, locale: "zh-CN" | "en") {
+  const info = getScanStatusInfo(status);
+  if (locale !== "zh-CN") return info;
+  const labels: Record<string, string> = {
+    Benign: "安全",
+    Malicious: "恶意",
+    Suspicious: "可疑",
+    "Loading...": "加载中...",
+    Pending: "等待中",
+    Error: "错误",
+  };
+  return {
+    ...info,
+    label: labels[info.label] ?? info.label,
+  };
+}
+
 function getDimensionIcon(rating: string) {
   switch (rating) {
     case "ok":
@@ -139,6 +168,7 @@ function getDimensionIcon(rating: string) {
 }
 
 function LlmAnalysisDetail({ analysis }: { analysis: LlmAnalysis }) {
+  const { locale } = useI18n();
   const verdict = analysis.verdict ?? analysis.status;
   const [isOpen, setIsOpen] = useState(false);
 
@@ -159,7 +189,7 @@ function LlmAnalysisDetail({ analysis }: { analysis: LlmAnalysis }) {
       >
         <span className="analysis-summary-text">{analysis.summary}</span>
         <span className="analysis-detail-toggle">
-          Details <span className="chevron">{"\u25BE"}</span>
+          {locale === "zh-CN" ? "详情" : "Details"} <span className="chevron">{"\u25BE"}</span>
         </span>
       </button>
       <div className="analysis-body">
@@ -180,8 +210,10 @@ function LlmAnalysisDetail({ analysis }: { analysis: LlmAnalysis }) {
           </div>
         ) : null}
         {analysis.findings ? (
-          <div className="scan-findings-section">
-            <div className="scan-findings-title">Scan Findings in Context</div>
+            <div className="scan-findings-section">
+            <div className="scan-findings-title">
+              {locale === "zh-CN" ? "扫描发现上下文" : "Scan Findings in Context"}
+            </div>
             {(() => {
               const counts = new Map<string, number>();
               return analysis.findings.split("\n").map((line) => {
@@ -199,11 +231,17 @@ function LlmAnalysisDetail({ analysis }: { analysis: LlmAnalysis }) {
         {analysis.guidance ? (
           <div className={`analysis-guidance ${guidanceClass}`}>
             <div className="analysis-guidance-label">
-              {verdict === "malicious"
-                ? "Do not install this skill"
-                : verdict === "suspicious"
-                  ? "What to consider before installing"
-                  : "Assessment"}
+              {locale === "zh-CN"
+                ? verdict === "malicious"
+                  ? "请勿安装此技能"
+                  : verdict === "suspicious"
+                    ? "安装前请注意"
+                    : "评估结论"
+                : verdict === "malicious"
+                  ? "Do not install this skill"
+                  : verdict === "suspicious"
+                    ? "What to consider before installing"
+                    : "Assessment"}
             </div>
             {analysis.guidance}
           </div>
@@ -234,35 +272,49 @@ function areStaticFindingsExternallyCleared(
   );
 }
 
-function getStaticGuidance(findings: StaticFinding[], vtStatus?: string, llmStatus?: string) {
+function getStaticGuidance(
+  findings: StaticFinding[],
+  vtStatus: string | undefined,
+  llmStatus: string | undefined,
+  locale: "zh-CN" | "en",
+) {
   const hasMaliciousCode = findings.some((f) => f.code.startsWith("malicious."));
+  const zh = locale === "zh-CN";
   if (hasMaliciousCode) {
     return {
       className: "malicious",
-      label: "Critical security concern",
-      text: "These patterns indicate potentially dangerous behavior. Exercise extreme caution and review the code thoroughly before installing.",
+      label: zh ? "严重安全风险" : "Critical security concern",
+      text: zh
+        ? "这些模式表明代码可能存在危险行为。安装前请保持高度谨慎，并完整审查代码。"
+        : "These patterns indicate potentially dangerous behavior. Exercise extreme caution and review the code thoroughly before installing.",
     };
   }
   const externallyCleared = areStaticFindingsExternallyCleared(findings, vtStatus, llmStatus);
   if (externallyCleared) {
     return {
       className: "benign",
-      label: "Confirmed safe by external scanners",
-      text: "Static analysis detected API credential-access patterns, but both VirusTotal and OpenClaw confirmed this skill is safe. These patterns are common in legitimate API integration skills.",
+      label: zh ? "已被外部扫描确认安全" : "Confirmed safe by external scanners",
+      text: zh
+        ? "静态分析检测到了 API 凭据访问模式，但 VirusTotal 和 OpenClaw 都确认该技能是安全的。这类模式在合法的 API 集成技能中很常见。"
+        : "Static analysis detected API credential-access patterns, but both VirusTotal and OpenClaw confirmed this skill is safe. These patterns are common in legitimate API integration skills.",
     };
   }
   const hasCritical = findings.some((f) => f.severity === "critical");
   if (hasCritical) {
     return {
       className: "suspicious",
-      label: "Patterns worth reviewing",
-      text: "These patterns may indicate risky behavior. Check the VirusTotal and OpenClaw results above for context-aware analysis before installing.",
+      label: zh ? "建议重点审查的模式" : "Patterns worth reviewing",
+      text: zh
+        ? "这些模式可能意味着存在风险。安装前请结合上方 VirusTotal 和 OpenClaw 的结果做上下文判断。"
+        : "These patterns may indicate risky behavior. Check the VirusTotal and OpenClaw results above for context-aware analysis before installing.",
     };
   }
   return {
     className: "benign",
-    label: "About static analysis",
-    text: "These patterns were detected by automated regex scanning. They may be normal for skills that integrate with external APIs. Check the VirusTotal and OpenClaw results above for context-aware analysis.",
+    label: zh ? "关于静态分析" : "About static analysis",
+    text: zh
+      ? "这些模式来自自动化正则扫描。对于集成外部 API 的技能来说，它们也可能是正常行为。请结合上方 VirusTotal 和 OpenClaw 的结果做上下文判断。"
+      : "These patterns were detected by automated regex scanning. They may be normal for skills that integrate with external APIs. Check the VirusTotal and OpenClaw results above for context-aware analysis.",
   };
 }
 
@@ -275,8 +327,9 @@ function StaticAnalysisDetail({
   vtStatus?: string;
   llmStatus?: string;
 }) {
+  const { locale } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
-  const guidance = getStaticGuidance(findings, vtStatus, llmStatus);
+  const guidance = getStaticGuidance(findings, vtStatus, llmStatus, locale);
 
   return (
     <div className={`analysis-detail${isOpen ? " is-open" : ""}`}>
@@ -291,10 +344,12 @@ function StaticAnalysisDetail({
         aria-expanded={isOpen}
       >
         <span className="analysis-summary-text">
-          Static analysis: {findings.length} pattern{findings.length !== 1 ? "s" : ""} detected
+          {locale === "zh-CN"
+            ? `静态分析：发现 ${findings.length} 个模式`
+            : `Static analysis: ${findings.length} pattern${findings.length !== 1 ? "s" : ""} detected`}
         </span>
         <span className="analysis-detail-toggle">
-          Details <span className="chevron">{"\u25BE"}</span>
+          {locale === "zh-CN" ? "详情" : "Details"} <span className="chevron">{"\u25BE"}</span>
         </span>
       </button>
       <div className="analysis-body">
@@ -334,6 +389,8 @@ export function SecurityScanResults({
   capabilityTags,
   variant = "panel",
 }: SecurityScanResultsProps) {
+  const { locale } = useI18n();
+  const capabilityLabels = getCapabilityLabels(locale);
   const visibleCapabilityTags = (capabilityTags ?? []).filter(Boolean);
   const hasStaticFindings = staticFindings && staticFindings.length > 0;
   if (!sha256hash && !llmAnalysis && !hasStaticFindings && visibleCapabilityTags.length === 0) {
@@ -342,12 +399,12 @@ export function SecurityScanResults({
 
   const vtStatus = vtAnalysis?.status ?? "pending";
   const vtUrl = sha256hash ? `https://www.virustotal.com/gui/file/${sha256hash}` : null;
-  const vtStatusInfo = getScanStatusInfo(vtStatus);
+  const vtStatusInfo = getLocalizedScanStatusInfo(vtStatus, locale);
   const isCodeInsight = vtAnalysis?.source === "code_insight";
   const aiAnalysis = vtAnalysis?.analysis;
 
   const llmVerdict = llmAnalysis?.verdict ?? llmAnalysis?.status;
-  const llmStatusInfo = llmVerdict ? getScanStatusInfo(llmVerdict) : null;
+  const llmStatusInfo = llmVerdict ? getLocalizedScanStatusInfo(llmVerdict, locale) : null;
 
   if (variant === "badge") {
     return (
@@ -381,21 +438,24 @@ export function SecurityScanResults({
 
   return (
     <div className="scan-results-panel">
-      <div className="scan-results-title">Security Scan</div>
+      <div className="scan-results-title">{locale === "zh-CN" ? "安全扫描" : "Security Scan"}</div>
       <div className="scan-results-list">
         {visibleCapabilityTags.length > 0 ? (
           <div className="scan-capabilities-section">
-            <div className="scan-findings-title">Capability signals</div>
+            <div className="scan-findings-title">
+              {locale === "zh-CN" ? "能力信号" : "Capability signals"}
+            </div>
             <div className="scan-capability-tags">
               {visibleCapabilityTags.map((tag) => (
                 <span key={tag} className="tag scan-capability-tag">
-                  {SKILL_CAPABILITY_LABELS[tag] ?? tag}
+                  {capabilityLabels[tag] ?? tag}
                 </span>
               ))}
             </div>
             <div className="scan-capability-note">
-              These labels describe what authority the skill may exercise. They are separate from
-              suspicious or malicious moderation verdicts.
+              {locale === "zh-CN"
+                ? "这些标签描述了技能可能具备的权限范围，它们与“可疑”或“恶意”的审核结论是分开的。"
+                : "These labels describe what authority the skill may exercise. They are separate from suspicious or malicious moderation verdicts."}
             </div>
           </div>
         ) : null}
@@ -415,14 +475,16 @@ export function SecurityScanResults({
                 rel="noopener noreferrer"
                 className="scan-result-link"
               >
-                View report →
+                {locale === "zh-CN" ? "查看报告 →" : "View report →"}
               </a>
             ) : null}
           </div>
         ) : null}
         {isCodeInsight && aiAnalysis && (vtStatus === "malicious" || vtStatus === "suspicious") ? (
           <div className={`code-insight-analysis ${vtStatus}`}>
-            <div className="code-insight-label">Code Insight</div>
+            <div className="code-insight-label">
+              {locale === "zh-CN" ? "代码洞察" : "Code Insight"}
+            </div>
             <p className="code-insight-text">{aiAnalysis}</p>
           </div>
         ) : null}
@@ -436,7 +498,11 @@ export function SecurityScanResults({
               {llmStatusInfo.label}
             </div>
             {llmAnalysis.confidence ? (
-              <span className="scan-result-confidence">{llmAnalysis.confidence} confidence</span>
+              <span className="scan-result-confidence">
+                {locale === "zh-CN"
+                  ? `置信度 ${llmAnalysis.confidence}`
+                  : `${llmAnalysis.confidence} confidence`}
+              </span>
             ) : null}
           </div>
         ) : null}

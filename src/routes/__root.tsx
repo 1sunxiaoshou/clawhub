@@ -1,5 +1,4 @@
 import { createRootRoute, HeadContent, Scripts, useLocation } from "@tanstack/react-router";
-import { Analytics } from "@vercel/analytics/react";
 import { Toaster } from "sonner";
 import { AppProviders } from "../components/AppProviders";
 import { ClientOnly } from "../components/ClientOnly";
@@ -7,10 +6,36 @@ import { DeploymentDriftBanner } from "../components/DeploymentDriftBanner";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { Footer } from "../components/Footer";
 import Header from "../components/Header";
+import { DEFAULT_LOCALE, LOCALE_KEY, resolveInitialLocale, useI18n } from "../lib/i18n";
 import { getSiteDescription, getSiteMode, getSiteName, getSiteUrlForMode } from "../lib/site";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
+  loader: async () => {
+    if (import.meta.env.SSR) {
+      const serverRuntimeModule = "@tanstack/react-start/server";
+      const { getCookie, getRequestHeaders } = (await import(/* @vite-ignore */ serverRuntimeModule)) as {
+        getCookie: (name: string) => string | undefined;
+        getRequestHeaders: () => Headers;
+      };
+
+      return {
+        initialLocale: resolveInitialLocale({
+          cookieLocale: getCookie(LOCALE_KEY),
+          acceptLanguage: getRequestHeaders().get("accept-language"),
+        }),
+      };
+    }
+
+    const locale =
+      typeof document !== "undefined" && document.documentElement.lang
+        ? resolveInitialLocale({ cookieLocale: document.documentElement.lang })
+        : DEFAULT_LOCALE;
+
+    return {
+      initialLocale: locale,
+    };
+  },
   head: () => {
     const mode = getSiteMode();
     const siteName = getSiteName(mode);
@@ -92,6 +117,24 @@ export const Route = createRootRoute({
           rel: "stylesheet",
           href: appCss,
         },
+        {
+          rel: "icon",
+          type: "image/png",
+          href: "/deepdata-logo.png",
+        },
+        {
+          rel: "shortcut icon",
+          type: "image/png",
+          href: "/deepdata-logo.png",
+        },
+        {
+          rel: "apple-touch-icon",
+          href: "/deepdata-logo.png",
+        },
+        {
+          rel: "manifest",
+          href: "/manifest.json",
+        },
       ],
     };
   },
@@ -100,37 +143,44 @@ export const Route = createRootRoute({
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  const { initialLocale } = Route.useLoaderData();
+
   return (
-    <html lang="en">
+    <AppProviders initialLocale={initialLocale}>
+      <InnerRootDocument>{children}</InnerRootDocument>
+    </AppProviders>
+  );
+}
+
+function InnerRootDocument({ children }: { children: React.ReactNode }) {
+  const { locale } = useI18n();
+
+  return (
+    <html lang={locale}>
       <head>
         <HeadContent />
       </head>
       <body>
-        <AppProviders>
-          <div className="app-shell">
-            <Header />
-            <ClientOnly>
-              <DeploymentDriftBanner />
-            </ClientOnly>
-            <RouteErrorBoundary>{children}</RouteErrorBoundary>
-            <Footer />
-          </div>
-          <Toaster
-            position="bottom-right"
-            toastOptions={{
-              style: {
-                background: "var(--surface)",
-                color: "var(--ink)",
-                border: "1px solid var(--line)",
-                borderRadius: "var(--radius-md)",
-                fontFamily: "var(--font-body)",
-              },
-            }}
-          />
+        <div className="app-shell">
+          <Header />
           <ClientOnly>
-            <Analytics />
+            <DeploymentDriftBanner />
           </ClientOnly>
-        </AppProviders>
+          <RouteErrorBoundary>{children}</RouteErrorBoundary>
+          <Footer />
+        </div>
+        <Toaster
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              background: "var(--surface)",
+              color: "var(--ink)",
+              border: "1px solid var(--line)",
+              borderRadius: "var(--radius-md)",
+              fontFamily: "var(--font-body)",
+            },
+          }}
+        />
         <Scripts />
       </body>
     </html>

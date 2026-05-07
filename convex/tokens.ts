@@ -59,6 +59,20 @@ export const revoke = mutation({
   },
 });
 
+export const rename = mutation({
+  args: { tokenId: v.id("apiTokens"), label: v.string() },
+  handler: async (ctx, args) => {
+    const { userId } = await requireUser(ctx);
+    const token = await ctx.db.get(args.tokenId);
+    if (!token) throw new Error("Token not found");
+    if (token.userId !== userId) throw new Error("Forbidden");
+    if (token.revokedAt) throw new Error("Token is revoked");
+    const label = args.label.trim();
+    if (!label) throw new Error("Token name is required");
+    await ctx.db.patch(token._id, { label });
+  },
+});
+
 export const getByHashInternal = internalQuery({
   args: { tokenHash: v.string() },
   handler: async (ctx, args) => {

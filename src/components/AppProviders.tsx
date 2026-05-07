@@ -1,8 +1,11 @@
 import { ConvexAuthProvider, useAuthActions } from "@convex-dev/auth/react";
 import { useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { convex } from "../convex/client";
 import { getUserFacingAuthError, normalizeAuthErrorMessage } from "../lib/authErrorMessage";
+import { I18nProvider, type Locale } from "../lib/i18n";
 import { clearAuthError, setAuthError } from "../lib/useAuthError";
+import { TooltipProvider } from "./ui/tooltip";
 import { UserBootstrap } from "./UserBootstrap";
 
 function getPendingAuthCode() {
@@ -37,11 +40,11 @@ export function AuthCodeHandler() {
     void signInWithCode(undefined, { code: pending.code })
       .then((result) => {
         if (result.signingIn === false) {
-          setAuthError("Sign in failed. Please try again.");
+          reportAuthError("Sign in failed. Please try again.");
         }
       })
       .catch((error) => {
-        setAuthError(getUserFacingAuthError(error, "Sign in failed. Please try again."));
+        reportAuthError(getUserFacingAuthError(error, "Sign in failed. Please try again."));
       });
   }, [signInWithCode]);
 
@@ -71,21 +74,37 @@ export function AuthErrorHandler() {
     handledErrorRef.current = pending.description;
 
     window.history.replaceState(null, "", pending.relativeUrl);
-    setAuthError(
-      normalizeAuthErrorMessage(pending.description, "Sign in failed. Please try again."),
-    );
+    reportAuthError(normalizeAuthErrorMessage(pending.description, "Sign in failed. Please try again."));
   }, []);
 
   return null;
 }
 
-export function AppProviders({ children }: { children: React.ReactNode }) {
+export function AppProviders({
+  children,
+  initialLocale,
+}: {
+  children: React.ReactNode;
+  initialLocale: Locale;
+}) {
   return (
     <ConvexAuthProvider client={convex} shouldHandleCode={false}>
-      <AuthCodeHandler />
-      <AuthErrorHandler />
-      <UserBootstrap />
-      {children}
+      <TooltipProvider delayDuration={120}>
+        <I18nProvider initialLocale={initialLocale}>
+          <AuthCodeHandler />
+          <AuthErrorHandler />
+          <UserBootstrap />
+          {children}
+        </I18nProvider>
+      </TooltipProvider>
     </ConvexAuthProvider>
   );
+}
+
+function reportAuthError(message: string) {
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/cli/auth")) {
+    setAuthError(message);
+    return;
+  }
+  toast.error(message);
 }

@@ -4,6 +4,7 @@ import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { MarkdownPreview } from "./MarkdownPreview";
 import { formatBytes } from "./skillDetailUtils";
+import { useI18n } from "../lib/i18n";
 import { Skeleton } from "./ui/skeleton";
 
 type SkillFile = Doc<"skillVersions">["files"][number];
@@ -21,6 +22,7 @@ export function SkillFilesPanel({
   readmeError,
   latestFiles,
 }: SkillFilesPanelProps) {
+  const { t } = useI18n();
   const getFileText = useAction(api.skills.getFileText);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string | null>(null);
@@ -83,7 +85,7 @@ export function SkillFilesPanel({
         .catch((error) => {
           if (!isMounted.current) return;
           if (requestId.current !== current) return;
-          setFileError(error instanceof Error ? error.message : "Failed to load file");
+          setFileError(error instanceof Error ? error.message : t("skillDetail.files.failedToLoad"));
           setIsLoading(false);
         });
     },
@@ -101,7 +103,7 @@ export function SkillFilesPanel({
             <MarkdownPreview>{readmeContent}</MarkdownPreview>
           ) : readmeError ? (
             <div className="text-sm text-[color:var(--ink-soft)]">
-              Failed to load SKILL.md: {readmeError}
+              {t("skillDetail.files.failedToLoadReadme")} {readmeError}
             </div>
           ) : (
             <Skeleton className="h-24 w-full" />
@@ -112,16 +114,16 @@ export function SkillFilesPanel({
         <div className="flex flex-col border-b border-[color:var(--line)] md:border-r md:border-b-0">
           <div className="flex items-center justify-between border-b border-[color:var(--line)] bg-[color:var(--surface-muted)] px-3 py-2">
             <h3 className="m-0 font-display text-[1.05rem] font-bold text-[color:var(--ink)]">
-              Files
+              {t("skillDetail.files.title")}
             </h3>
             <span className="m-0 text-sm text-[color:var(--ink-soft)]">
-              {latestFiles.length} total
+              {t("skillDetail.files.total", { count: latestFiles.length })}
             </span>
           </div>
           <div className="flex max-h-[400px] flex-col overflow-y-auto">
             {latestFiles.length === 0 ? (
               <div className="px-3 py-2 text-sm text-[color:var(--ink-soft)]">
-                No files available.
+                {t("skillDetail.files.none")}
               </div>
             ) : (
               latestFiles.map((file) => (
@@ -147,7 +149,7 @@ export function SkillFilesPanel({
         </div>
         <div className="flex flex-col">
           <div className="flex items-center justify-between border-b border-[color:var(--line)] bg-[color:var(--surface-muted)] px-3 py-2">
-            <div className="truncate font-mono text-xs">{selectedPath ?? "Select a file"}</div>
+            <div className="truncate font-mono text-xs">{selectedPath ?? t("skillDetail.files.selectPrompt")}</div>
             {fileMeta ? (
               <span className="ml-2 shrink-0 text-xs text-[color:var(--ink-soft)]">
                 {formatBytes(fileMeta.size)} · {fileMeta.sha256.slice(0, 12)}…
@@ -159,14 +161,14 @@ export function SkillFilesPanel({
               <Skeleton className="h-24 w-full" />
             ) : fileError ? (
               <div className="text-sm text-[color:var(--ink-soft)]">
-                Failed to load file: {fileError}
+                {t("skillDetail.files.failedToLoad")} {fileError}
               </div>
             ) : fileContent ? (
               <pre className="m-0 overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">
                 {fileContent}
               </pre>
             ) : (
-              <div className="text-sm text-[color:var(--ink-soft)]">Select a file to preview.</div>
+              <div className="text-sm text-[color:var(--ink-soft)]">{t("skillDetail.files.previewPrompt")}</div>
             )}
           </div>
         </div>

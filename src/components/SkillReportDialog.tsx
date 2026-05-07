@@ -1,4 +1,5 @@
 import { Button } from "./ui/button";
+import { useI18n } from "../lib/i18n";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,7 @@ export function SkillReportDialog({
   onCancel,
   onSubmit,
 }: SkillReportDialogProps) {
+  const { t } = useI18n();
   return (
     <Dialog
       open={isOpen}
@@ -37,9 +39,9 @@ export function SkillReportDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Report skill</DialogTitle>
+          <DialogTitle>{t("skillDetail.report.title")}</DialogTitle>
           <DialogDescription>
-            Describe the issue so moderators can review it quickly.
+            {t("skillDetail.report.description")}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -50,8 +52,8 @@ export function SkillReportDialog({
           }}
         >
           <Textarea
-            aria-label="Report reason"
-            placeholder="What should moderators know?"
+            aria-label={t("skillDetail.report.reasonLabel")}
+            placeholder={t("skillDetail.report.placeholder")}
             value={reportReason}
             onChange={(event) => onReasonChange(event.target.value)}
             rows={5}
@@ -72,10 +74,10 @@ export function SkillReportDialog({
               }}
               disabled={isSubmitting}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={isSubmitting} loading={isSubmitting}>
-              {isSubmitting ? "Submitting..." : "Submit report"}
+              {isSubmitting ? t("skillDetail.report.submitting") : t("skillDetail.report.submit")}
             </Button>
           </DialogFooter>
         </form>

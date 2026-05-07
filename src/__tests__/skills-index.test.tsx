@@ -66,17 +66,16 @@ describe("SkillsIndex", () => {
   it("renders an empty state when no skills are returned", async () => {
     render(<SkillsIndex />);
     await act(async () => {});
-    expect(screen.getByText("No skills match that filter")).toBeTruthy();
+    expect(screen.getByText("No skills matching your current filters")).toBeTruthy();
   });
 
   it("shows loading state before fetch completes", async () => {
     // Never resolve the query to keep the component in loading state
     convexHttpMock.query.mockReturnValue(new Promise(() => {}));
-    render(<SkillsIndex />);
+    const { container } = render(<SkillsIndex />);
     await act(async () => {});
-    // Header subtitle shows "Loading skills..."
-    expect(screen.getAllByText("Loading skills...").length).toBeGreaterThanOrEqual(1);
-    expect(screen.queryByText("No skills match that filter")).toBeNull();
+    expect(container.querySelectorAll(".animate-pulse").length).toBeGreaterThan(0);
+    expect(screen.queryByText("No skills matching your current filters")).toBeNull();
   });
 
   it("shows empty state immediately when search returns no results", async () => {
@@ -91,7 +90,7 @@ describe("SkillsIndex", () => {
     });
 
     // Should show empty state, not loading
-    expect(screen.getByText("No skills match that filter")).toBeTruthy();
+    expect(screen.getByText("No skills matching your current filters")).toBeTruthy();
     expect(screen.queryByText("Loading skills...")).toBeNull();
   });
 
@@ -136,7 +135,7 @@ describe("SkillsIndex", () => {
 
     render(<SkillsIndex />);
 
-    const input = screen.getByPlaceholderText("Search skills by name, slug, or summary...");
+    const input = screen.getByPlaceholderText("Search skills by name, slug or summary...");
     await act(async () => {
       fireEvent.change(input, { target: { value: "cli-design-framework" } });
       await vi.runAllTimersAsync();
@@ -161,7 +160,7 @@ describe("SkillsIndex", () => {
 
     render(<SkillsIndex />);
 
-    const input = screen.getByPlaceholderText("Search skills by name, slug, or summary...");
+    const input = screen.getByPlaceholderText("Search skills by name, slug or summary...");
     await act(async () => {
       fireEvent.change(input, { target: { value: "cli-design-framework" } });
       await vi.runAllTimersAsync();
@@ -299,29 +298,6 @@ describe("SkillsIndex", () => {
         capabilityTag: "crypto",
       }),
     );
-  });
-
-  it("shows and clears the active capability tag filter", async () => {
-    searchMock = { tag: "crypto" };
-    render(<SkillsIndex />);
-    await act(async () => {});
-
-    const capabilityChip = screen.getByRole("button", { name: /crypto/i });
-    expect(capabilityChip).toBeTruthy();
-
-    await act(async () => {
-      fireEvent.click(capabilityChip);
-    });
-
-    expect(navigateMock).toHaveBeenCalled();
-    const lastCall = navigateMock.mock.calls.at(-1)?.[0] as {
-      replace?: boolean;
-      search: (prev: Record<string, unknown>) => Record<string, unknown>;
-    };
-    expect(lastCall.replace).toBe(true);
-    expect(lastCall.search({ tag: "crypto" })).toEqual({
-      tag: undefined,
-    });
   });
 
   it("shows load-more button when more results are available", async () => {

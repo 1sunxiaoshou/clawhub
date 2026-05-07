@@ -41,10 +41,11 @@ Fill in `.env.local`:
 Generate Convex Auth keys for your deployment:
 
 ```bash
-bunx auth --deployment-name <deployment> --web-server-url http://localhost:3000
+bun run auth:keys -- --write .tmp-auth.env
+bunx convex env set --from-file .tmp-auth.env --force
 ```
 
-Then paste the printed `JWT_PRIVATE_KEY` + `JWKS` into `.env.local` (and ensure the deployment got them too).
+Then paste the generated `JWT_PRIVATE_KEY` + `JWKS` into `.env.local` for reference, and delete `.tmp-auth.env` after use.
 
 ## 3) CLI: login + basic commands
 

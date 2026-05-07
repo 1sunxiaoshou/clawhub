@@ -580,7 +580,7 @@ describe("SkillDetailPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: /report/i }));
 
     expect(await screen.findByRole("dialog")).toBeTruthy();
-    expect(screen.getByText(/Report skill/i)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "skillDetail.report.title" })).toBeTruthy();
   });
 
   it("shows owner tools for the skill owner", async () => {

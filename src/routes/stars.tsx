@@ -9,6 +9,7 @@ import { Container } from "../components/layout/Container";
 import { SignInButton } from "../components/SignInButton";
 import { Button } from "../components/ui/button";
 import { formatCompactStat } from "../lib/numberFormat";
+import { useI18n } from "../lib/i18n";
 import type { PublicSkill } from "../lib/publicUser";
 
 export const Route = createFileRoute("/stars")({
@@ -21,7 +22,7 @@ function Stars() {
     (useQuery(api.stars.listByUser, me ? { userId: me._id, limit: 50 } : "skip") as
       | PublicSkill[]
       | undefined) ?? [];
-
+  const { t } = useI18n();
   const toggleStar = useMutation(api.stars.toggle);
 
   if (!me) {
@@ -30,10 +31,10 @@ function Stars() {
         <Container size="narrow">
           <EmptyState
             icon={Star}
-            title="Sign in to see your highlights"
-            description="Star skills for quick access later."
+            title={t("stars.signInTitle")}
+            description={t("stars.signInDesc")}
           >
-            <SignInButton variant="outline">Sign in with GitHub</SignInButton>
+            <SignInButton variant="outline">{t("header.signIn")}</SignInButton>
           </EmptyState>
         </Container>
       </main>
@@ -46,18 +47,18 @@ function Stars() {
         <div className="flex flex-col gap-6">
           <header>
             <h1 className="font-display text-2xl font-bold text-[color:var(--ink)]">
-              Your highlights
+              {t("stars.title")}
             </h1>
             <p className="mt-1 text-sm text-[color:var(--ink-soft)]">
-              Skills you've starred for quick access.
+              {t("stars.description")}
             </p>
           </header>
           {skills.length === 0 ? (
             <EmptyState
               icon={Star}
-              title="No stars yet"
-              description="Browse skills and star your favorites."
-              action={{ label: "Browse skills", href: "/skills" }}
+              title={t("stars.noStarsTitle")}
+              description={t("stars.noStarsDesc")}
+              action={{ label: t("stars.browseSkills"), href: "/skills" }}
             />
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-5">
@@ -90,10 +91,10 @@ function Stars() {
                             await toggleStar({ skillId: skill._id });
                           } catch (error) {
                             console.error("Failed to unstar skill:", error);
-                            toast.error("Unable to unstar this skill. Please try again.");
+                            toast.error(t("stars.unstarError"));
                           }
                         }}
-                        aria-label={`Unstar ${skill.displayName}`}
+                        aria-label={t("stars.unstarAria", { name: skill.displayName })}
                         className="text-[color:var(--gold)]"
                       >
                         <span aria-hidden="true">★</span>

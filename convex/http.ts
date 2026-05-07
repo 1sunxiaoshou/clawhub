@@ -20,6 +20,7 @@ import {
   listPluginsV1Http,
   listSkillsV1Http,
   listSoulsV1Http,
+  meV1Http,
   mintPublishTokenV1Http,
   packagesDeleteRouterV1Http,
   packagesGetRouterV1Http,
@@ -173,6 +174,12 @@ http.route({
   pathPrefix: `${ApiRoutes.transfers}/`,
   method: "GET",
   handler: transfersGetRouterV1Http,
+});
+
+http.route({
+  path: ApiRoutes.me,
+  method: "GET",
+  handler: meV1Http,
 });
 
 http.route({

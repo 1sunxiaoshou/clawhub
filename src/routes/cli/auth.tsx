@@ -7,6 +7,7 @@ import { SignInButton } from "../../components/SignInButton";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { getClawHubSiteUrl, normalizeClawHubSiteOrigin } from "../../lib/site";
 import { useAuthError } from "../../lib/useAuthError";
+import { useI18n } from "../../lib/i18n";
 import { useAuthStatus } from "../../lib/useAuthStatus";
 
 export const Route = createFileRoute("/cli/auth")({
@@ -17,6 +18,7 @@ function CliAuth() {
   const { isAuthenticated, isLoading, me } = useAuthStatus();
   const { error: authError, clear: clearAuthError } = useAuthError();
   const createToken = useMutation(api.tokens.create);
+  const { t } = useI18n();
 
   const search = Route.useSearch() as {
     redirect_uri?: string;
@@ -24,13 +26,13 @@ function CliAuth() {
     label_b64?: string;
     state?: string;
   };
-  const [status, setStatus] = useState<string>("Preparing...");
+  const [status, setStatus] = useState<string>(t("cliAuth.preparing"));
   const [token, setToken] = useState<string | null>(null);
   const hasRun = useRef(false);
 
   const redirectUri = search.redirect_uri ?? "";
   const label =
-    (decodeLabel(search.label_b64) ?? search.label ?? "CLI token").trim() || "CLI token";
+    (decodeLabel(search.label_b64) ?? search.label ?? t("cliAuth.tokenLabel")).trim() || t("cliAuth.tokenLabel");
   const state = typeof search.state === "string" ? search.state.trim() : "";
 
   const safeRedirect = useMemo(() => isAllowedRedirectUri(redirectUri), [redirectUri]);
@@ -49,10 +51,10 @@ function CliAuth() {
     hasRun.current = true;
 
     const run = async () => {
-      setStatus("Creating token...");
+      setStatus(t("cliAuth.creatingToken"));
       const result = await createToken({ label });
       setToken(result.token);
-      setStatus("Redirecting to CLI...");
+      setStatus(t("cliAuth.redirecting"));
       const hash = new URLSearchParams();
       hash.set("token", result.token);
       hash.set("registry", registry);
@@ -61,7 +63,7 @@ function CliAuth() {
     };
 
     void run().catch((error) => {
-      const message = error instanceof Error ? error.message : "Failed to create token";
+      const message = error instanceof Error ? error.message : t("login.errorCreatingToken");
       setStatus(message);
       setToken(null);
     });
@@ -73,12 +75,12 @@ function CliAuth() {
         <Container size="narrow">
           <Card>
             <CardHeader>
-              <CardTitle className="text-2xl">CLI login</CardTitle>
+              <CardTitle className="text-2xl">{t("cliAuth.title")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-[color:var(--ink-soft)]">Invalid redirect URL.</p>
+              <p className="text-sm text-[color:var(--ink-soft)]">{t("cliAuth.invalidRedirect")}</p>
               <p className="text-sm text-[color:var(--ink-soft)]">
-                Run the CLI again to start a fresh login.
+                {t("cliAuth.runCliAgain")}
               </p>
             </CardContent>
           </Card>
@@ -93,12 +95,12 @@ function CliAuth() {
         <Container size="narrow">
           <Card>
             <CardHeader>
-              <CardTitle className="text-2xl">CLI login</CardTitle>
+              <CardTitle className="text-2xl">{t("cliAuth.title")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-[color:var(--ink-soft)]">Missing state.</p>
+              <p className="text-sm text-[color:var(--ink-soft)]">{t("cliAuth.missingState")}</p>
               <p className="text-sm text-[color:var(--ink-soft)]">
-                Run the CLI again to start a fresh login.
+                {t("cliAuth.runCliAgain")}
               </p>
             </CardContent>
           </Card>
@@ -113,11 +115,11 @@ function CliAuth() {
         <Container size="narrow">
           <Card>
             <CardHeader>
-              <CardTitle className="text-2xl">CLI login</CardTitle>
+              <CardTitle className="text-2xl">{t("cliAuth.title")}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-[color:var(--ink-soft)]">
-                Sign in to create an API token for the CLI.
+                {t("cliAuth.signInPrompt")}
               </p>
               {authError ? (
                 <p
@@ -139,7 +141,7 @@ function CliAuth() {
                 variant="primary"
                 disabled={isLoading}
               >
-                Sign in with GitHub
+                {t("header.signIn")}
               </SignInButton>
             </CardContent>
           </Card>
@@ -153,13 +155,13 @@ function CliAuth() {
       <Container size="narrow">
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">CLI login</CardTitle>
+            <CardTitle className="text-2xl">{t("cliAuth.title")}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-[color:var(--ink-soft)]">{status}</p>
             {token ? (
               <div className="text-sm text-[color:var(--ink-soft)] overflow-x-auto">
-                <div className="mb-2">If redirect fails, copy this token:</div>
+                <div className="mb-2">{t("cliAuth.copyTokenDesc")}</div>
                 <code className="font-mono text-xs">{token}</code>
               </div>
             ) : null}

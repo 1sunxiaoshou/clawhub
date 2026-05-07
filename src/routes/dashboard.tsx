@@ -23,6 +23,7 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { formatCompactStat } from "../lib/numberFormat";
+import { useI18n } from "../lib/i18n";
 import { familyLabel } from "../lib/packageLabels";
 import type { PublicSkill } from "../lib/publicUser";
 
@@ -109,21 +110,45 @@ function Dashboard() {
   ) as DashboardPackage[] | undefined;
 
   useEffect(() => {
-    if (selectedPublisherId) return;
-    const personal =
-      publishers?.find((entry) => entry.publisher.kind === "user") ?? publishers?.[0];
-    if (personal?.publisher._id) {
-      setSelectedPublisherId(personal.publisher._id);
+    if (publishers && publishers.length > 0 && !selectedPublisherId) {
+      setSelectedPublisherId(publishers[0].publisher._id);
     }
   }, [publishers, selectedPublisherId]);
+
+  const { t } = useI18n();
+
+  function scanStatusLabel(status: string | null | undefined) {
+    switch (status) {
+      case "pending":
+        return t("dashboard.scanStatus.pending");
+      case "clean":
+        return t("dashboard.scanStatus.clean");
+      case "suspicious":
+        return t("dashboard.scanStatus.suspicious");
+      case "malicious":
+        return t("dashboard.scanStatus.blocked");
+      case "not-run":
+        return t("dashboard.scanStatus.notRun");
+      default:
+        return null;
+    }
+  }
+
+  function releaseStatusLabel(
+    label: string,
+    status: string | null | undefined,
+    emptyLabel = t("common.loading"),
+  ) {
+    return `${label}: ${status?.trim() ? status : emptyLabel}`;
+  }
 
   if (!me) {
     return (
       <Container className="py-10">
         <Card>
           <CardContent className="flex flex-col items-start gap-3">
-            <span>Sign in to access your dashboard.</span>
-            <SignInButton variant="outline">Sign in with GitHub</SignInButton>
+            <span>{t("dashboard.signInPrompt")}</span>
+            <SignInButton variant="outline">{t("header.signIn")}</SignInButton>
           </CardContent>
         </Card>
       </Container>
@@ -141,10 +166,10 @@ function Dashboard() {
       <div className="mb-8 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
         <div className="grid gap-1.5">
           <h1 className="font-display text-2xl font-bold text-[color:var(--ink)]">
-            Publisher Dashboard
+            {t("dashboard.title")}
           </h1>
           <p className="text-sm text-[color:var(--ink-soft)]">
-            Owner-only view for skills and plugins, including security scans and verification.
+            {t("dashboard.description")}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -164,13 +189,13 @@ function Dashboard() {
           <Button asChild variant="primary">
             <Link to="/publish-skill" search={{ updateSlug: undefined }}>
               <Upload className="h-4 w-4" aria-hidden="true" />
-              Publish Skill
+              {t("dashboard.publishSkill")}
             </Link>
           </Button>
           <Button asChild>
             <Link to="/publish-plugin" search={{ ...emptyPluginPublishSearch, ownerHandle }}>
               <Plug className="h-4 w-4" aria-hidden="true" />
-              Publish Plugin
+              {t("dashboard.publishPlugin")}
             </Link>
           </Button>
         </div>
@@ -184,35 +209,40 @@ function Dashboard() {
             <section className="flex flex-col gap-4">
               <div>
                 <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">
-                  Publisher Skills
+                  {t("dashboard.publisherSkills")}
                 </h2>
                 <p className="mt-1.5 text-sm text-[color:var(--ink-soft)]">
-                  Hidden skill versions remain visible here while checks are pending.
+                  {t("dashboard.hiddenVersionsDesc")}
                 </p>
               </div>
               {skills.length === 0 ? (
                 <EmptyState
                   icon={Upload}
-                  title="No skills yet."
-                  description="Publish your first skill to share it with the community."
+                  title={t("dashboard.noSkillsTitle")}
+                  description={t("dashboard.noSkillsDesc")}
                 >
                   <Button asChild variant="primary">
                     <Link to="/publish-skill" search={{ updateSlug: undefined }}>
                       <Upload className="h-4 w-4" aria-hidden="true" />
-                      Publish Skill
+                      {t("dashboard.publishSkill")}
                     </Link>
                   </Button>
                 </EmptyState>
               ) : (
                 <div className="flex flex-col">
                   <div className="hidden grid-cols-[2fr_2fr_1.5fr_auto] gap-4 border-b border-[color:var(--line)] px-4 pb-2 text-xs font-semibold uppercase tracking-wider text-[color:var(--ink-soft)] md:grid">
-                    <span>Skill</span>
-                    <span>Summary</span>
-                    <span>Status</span>
-                    <span>Actions</span>
+                    <span>{t("dashboard.tableHeader.skill")}</span>
+                    <span>{t("dashboard.tableHeader.summary")}</span>
+                    <span>{t("dashboard.tableHeader.status")}</span>
+                    <span>{t("dashboard.tableHeader.actions")}</span>
                   </div>
                   {skills.map((skill) => (
-                    <SkillRow key={skill._id} skill={skill} ownerHandle={ownerHandle} />
+                    <SkillRow
+                      key={skill._id}
+                      skill={skill}
+                      ownerHandle={ownerHandle}
+                      t={t}
+                    />
                   ))}
                 </div>
               )}
@@ -222,17 +252,17 @@ function Dashboard() {
             <section className="flex flex-col gap-4">
               <div>
                 <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">
-                  Publisher Plugins
+                  {t("dashboard.publisherPlugins")}
                 </h2>
                 <p className="mt-1.5 text-sm text-[color:var(--ink-soft)]">
-                  Owner-only package view with VirusTotal, static scan, and verification state.
+                  {t("dashboard.pluginsDesc")}
                 </p>
               </div>
               {packages.length === 0 ? (
                 <EmptyState
                   icon={Plug}
-                  title="No plugins yet."
-                  description="Publish your first plugin release to validate and distribute it."
+                  title={t("dashboard.noPluginsTitle")}
+                  description={t("dashboard.noPluginsDesc")}
                 >
                   <Button asChild variant="primary">
                     <Link
@@ -240,20 +270,27 @@ function Dashboard() {
                       search={{ ...emptyPluginPublishSearch, ownerHandle }}
                     >
                       <Plug className="h-4 w-4" aria-hidden="true" />
-                      Publish Plugin
+                      {t("dashboard.publishPlugin")}
                     </Link>
                   </Button>
                 </EmptyState>
               ) : (
                 <div className="flex flex-col">
                   <div className="hidden grid-cols-[2fr_2fr_1.5fr_auto] gap-4 border-b border-[color:var(--line)] px-4 pb-2 text-xs font-semibold uppercase tracking-wider text-[color:var(--ink-soft)] md:grid">
-                    <span>Plugin</span>
-                    <span>Summary</span>
-                    <span>Status</span>
-                    <span>Actions</span>
+                    <span>{t("dashboard.tableHeader.plugin")}</span>
+                    <span>{t("dashboard.tableHeader.summary")}</span>
+                    <span>{t("dashboard.tableHeader.status")}</span>
+                    <span>{t("dashboard.tableHeader.actions")}</span>
                   </div>
                   {packages.map((pkg) => (
-                    <PackageRow key={pkg._id} pkg={pkg} ownerHandle={ownerHandle} />
+                    <PackageRow
+                      key={pkg._id}
+                      pkg={pkg}
+                      ownerHandle={ownerHandle}
+                      t={t}
+                      scanStatusLabel={scanStatusLabel}
+                      releaseStatusLabel={releaseStatusLabel}
+                    />
                   ))}
                 </div>
               )}
@@ -265,7 +302,15 @@ function Dashboard() {
   );
 }
 
-function SkillRow({ skill, ownerHandle }: { skill: DashboardSkill; ownerHandle: string | null }) {
+function SkillRow({
+  skill,
+  ownerHandle,
+  t,
+}: {
+  skill: DashboardSkill;
+  ownerHandle: string | null;
+  t: (key: string) => string;
+}) {
   return (
     <div className="grid items-start gap-4 border-b border-[color:var(--line)] px-4 py-4 last:border-b-0 md:grid-cols-[2fr_2fr_1.5fr_auto]">
       {/* Primary info */}
@@ -282,7 +327,7 @@ function SkillRow({ skill, ownerHandle }: { skill: DashboardSkill; ownerHandle: 
           {skill.pendingReview ? (
             <Badge variant="pending">
               <Clock className="h-3 w-3" aria-hidden="true" />
-              Pending checks
+              {t("dashboard.pendingChecks")}
             </Badge>
           ) : null}
         </div>
@@ -302,7 +347,7 @@ function SkillRow({ skill, ownerHandle }: { skill: DashboardSkill; ownerHandle: 
 
       {/* Summary */}
       <div className="text-sm text-[color:var(--ink-soft)]">
-        {skill.summary ?? "No summary provided."}
+        {skill.summary ?? t("dashboard.scanStatus.noSummary")}
       </div>
 
       {/* Status */}
@@ -311,14 +356,14 @@ function SkillRow({ skill, ownerHandle }: { skill: DashboardSkill; ownerHandle: 
           <>
             <span className="inline-flex items-center gap-1">
               <ShieldCheck size={13} aria-hidden="true" />
-              VT pending
+              {t("dashboard.vtPending")}
             </span>
             <span className="text-[color:var(--ink-soft)]">
-              Hidden until verification checks finish.
+              {t("dashboard.hiddenUntilVerified")}
             </span>
           </>
         ) : (
-          <span>Visible</span>
+          <span>{t("dashboard.visible")}</span>
         )}
       </div>
 
@@ -327,42 +372,17 @@ function SkillRow({ skill, ownerHandle }: { skill: DashboardSkill; ownerHandle: 
         <Button asChild size="sm">
           <Link to="/publish-skill" search={{ updateSlug: skill.slug }}>
             <Upload className="h-3 w-3" aria-hidden="true" />
-            New Version
+            {t("dashboard.newVersion")}
           </Link>
         </Button>
         <Button asChild variant="ghost" size="sm">
           <Link to="/$owner/$slug" params={{ owner: ownerHandle ?? "unknown", slug: skill.slug }}>
-            View
+            {t("dashboard.view")}
           </Link>
         </Button>
       </div>
     </div>
   );
-}
-
-function scanStatusLabel(status: string | null | undefined) {
-  switch (status) {
-    case "pending":
-      return "Pending scan";
-    case "clean":
-      return "Scan clean";
-    case "suspicious":
-      return "Suspicious";
-    case "malicious":
-      return "Blocked";
-    case "not-run":
-      return "Scan not run";
-    default:
-      return null;
-  }
-}
-
-function releaseStatusLabel(
-  label: string,
-  status: string | null | undefined,
-  emptyLabel = "not started",
-) {
-  return `${label}: ${status?.trim() ? status : emptyLabel}`;
 }
 
 function PackageStatusTag({
@@ -385,7 +405,19 @@ function PackageStatusTag({
   return <Badge variant={variant}>{label}</Badge>;
 }
 
-function PackageRow({ pkg, ownerHandle }: { pkg: DashboardPackage; ownerHandle: string }) {
+function PackageRow({
+  pkg,
+  ownerHandle,
+  t,
+  scanStatusLabel,
+  releaseStatusLabel,
+}: {
+  pkg: DashboardPackage;
+  ownerHandle: string;
+  t: (key: string) => string;
+  scanStatusLabel: (status: string | null | undefined) => string | null;
+  releaseStatusLabel: (label: string, status: string | null | undefined, empty?: string) => string;
+}) {
   const scanLabel = scanStatusLabel(pkg.scanStatus);
   const nextVersion = pkg.latestVersion ? semver.inc(pkg.latestVersion, "patch") : null;
   const sourceLabel = pkg.sourceRepo
@@ -433,7 +465,7 @@ function PackageRow({ pkg, ownerHandle }: { pkg: DashboardPackage; ownerHandle: 
           ) : null}
           {pkg.latestRelease?.staticScanStatus ? (
             <PackageStatusTag
-              label={`Static ${pkg.latestRelease.staticScanStatus}`}
+              label={`${t("dashboard.static")} ${pkg.latestRelease.staticScanStatus}`}
               tone={staticTone}
             />
           ) : null}
@@ -450,7 +482,7 @@ function PackageRow({ pkg, ownerHandle }: { pkg: DashboardPackage; ownerHandle: 
             <Package size={13} aria-hidden="true" /> {pkg.stats.versions}
           </span>
           <span className="inline-flex items-center gap-1">
-            <GitBranch size={13} aria-hidden="true" /> {pkg.latestVersion ?? "No tag"}
+            <GitBranch size={13} aria-hidden="true" /> {pkg.latestVersion ?? t("dashboard.noTag")}
           </span>
           {pkg.runtimeId ? (
             <span className="inline-flex items-center gap-1">
@@ -467,7 +499,7 @@ function PackageRow({ pkg, ownerHandle }: { pkg: DashboardPackage; ownerHandle: 
 
       {/* Summary */}
       <div className="text-sm text-[color:var(--ink-soft)]">
-        {pkg.summary ?? "No summary provided."}
+        {pkg.summary ?? t("dashboard.scanStatus.noSummary")}
       </div>
 
       {/* Status */}
@@ -477,7 +509,7 @@ function PackageRow({ pkg, ownerHandle }: { pkg: DashboardPackage; ownerHandle: 
           {releaseStatusLabel(
             "VT",
             pkg.latestRelease?.vtStatus,
-            pkg.scanStatus === "pending" ? "pending" : "unknown",
+            pkg.scanStatus === "pending" ? t("dashboard.scanStatus.pending") : t("common.loading"),
           )}
         </span>
         <span className="inline-flex items-center gap-1">
@@ -486,7 +518,7 @@ function PackageRow({ pkg, ownerHandle }: { pkg: DashboardPackage; ownerHandle: 
         </span>
         <span className="inline-flex items-center gap-1">
           <AlertTriangle size={13} aria-hidden="true" />{" "}
-          {releaseStatusLabel("Static", pkg.latestRelease?.staticScanStatus)}
+          {releaseStatusLabel(t("dashboard.static"), pkg.latestRelease?.staticScanStatus)}
         </span>
       </div>
 
@@ -505,12 +537,12 @@ function PackageRow({ pkg, ownerHandle }: { pkg: DashboardPackage; ownerHandle: 
             }}
           >
             <Upload className="h-3 w-3" aria-hidden="true" />
-            New Release
+            {t("dashboard.newRelease")}
           </Link>
         </Button>
         <Button asChild variant="ghost" size="sm">
           <Link to="/plugins/$name" params={{ name: pkg.name }}>
-            View
+            {t("dashboard.view")}
           </Link>
         </Button>
       </div>

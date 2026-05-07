@@ -9,6 +9,7 @@ import { canManageSkill, isModerator } from "../lib/roles";
 import { hasOwnProperty } from "../lib/hasOwnProperty";
 import type { SkillBySlugResult, SkillPageInitialData } from "../lib/skillPage";
 import { useAuthStatus } from "../lib/useAuthStatus";
+import { useI18n } from "../lib/i18n";
 import { ClientOnly } from "./ClientOnly";
 import { EmptyState } from "./EmptyState";
 import { Container } from "./layout/Container";
@@ -60,7 +61,7 @@ function formatReportError(error: unknown) {
     if (cleaned && cleaned !== "Server Error") return cleaned;
   }
 
-  return "Unable to submit report. Please try again.";
+  return "skillDetail.unableToSubmit";
 }
 
 export function SkillDetailPage({
@@ -69,6 +70,7 @@ export function SkillDetailPage({
   redirectToCanonical,
   initialData,
 }: SkillDetailPageProps) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { isAuthenticated, me } = useAuthStatus();
   const initialResult = initialData?.result ?? undefined;
@@ -169,9 +171,9 @@ export function SkillDetailPage({
     !modInfo?.isMalwareBlocked &&
     !modInfo?.isSuspicious;
   const scanResultsSuppressedMessage = suppressVersionScanResults
-    ? "Security findings on these releases were reviewed by staff and cleared for public use."
+    ? t("skillDetail.scanResultsSuppressed")
     : null;
-  const forkOfLabel = forkOf?.kind === "duplicate" ? "duplicate of" : "fork of";
+  const forkOfLabel = forkOf?.kind === "duplicate" ? t("skillDetail.duplicateOf") : t("skillDetail.forkOf");
   const forkOfOwnerHandle = forkOf?.owner?.handle ?? null;
   const forkOfOwnerId = forkOf?.owner?.userId ?? null;
   const canonicalOwnerHandle = canonical?.owner?.handle ?? null;
@@ -191,20 +193,20 @@ export function SkillDetailPage({
   const isRemoved = moderationStatus === "removed";
   const isAutoHidden = isHidden && staffSkill?.moderationReason === "auto.reports";
   const staffVisibilityTag = isRemoved
-    ? "Removed"
+    ? t("skillDetail.moderation.removed")
     : isAutoHidden
-      ? "Auto-hidden"
+      ? t("skillDetail.moderation.autoHidden")
       : isHidden
-        ? "Hidden"
+        ? t("skillDetail.moderation.hidden")
         : null;
   const staffModerationNote =
     staffSkill?.moderationNotes?.trim() ||
     (staffVisibilityTag
       ? isAutoHidden
-        ? "Auto-hidden after 4+ unique reports."
+        ? t("skillDetail.moderation.autoHiddenDesc")
         : isRemoved
-          ? "Removed from public view."
-          : "Hidden from public view."
+          ? t("skillDetail.moderation.removedDesc")
+          : t("skillDetail.moderation.hiddenDesc")
       : null);
 
   const versionById = new Map<Id<"skillVersions">, Doc<"skillVersions">>(
@@ -258,7 +260,7 @@ export function SkillDetailPage({
       })
       .catch((error) => {
         if (cancelled) return;
-        setReadmeError(error instanceof Error ? error.message : "Failed to load README");
+        setReadmeError(error instanceof Error ? error.message : t("skillDetail.failedToLoadReadme"));
         setReadme(null);
         setLoadedReadmeVersionId(latestVersion._id);
       });
@@ -301,7 +303,7 @@ export function SkillDetailPage({
     if (!skill) return;
     toast(`Delete tag "${tag}"?`, {
       action: {
-        label: "Delete",
+        label: t("common.delete"),
         onClick: () => {
           void deleteTags({ skillId: skill._id, tags: [tag] });
         },
@@ -314,7 +316,7 @@ export function SkillDetailPage({
 
     const trimmedReason = reportReason.trim();
     if (!trimmedReason) {
-      setReportError("Report reason required.");
+      setReportError(t("skillDetail.reportReasonRequired"));
       return;
     }
 
@@ -324,13 +326,14 @@ export function SkillDetailPage({
       const submission = await reportSkill({ skillId: skill._id, reason: trimmedReason });
       closeReportDialog();
       if (submission.reported) {
-        toast.success("Thanks — your report has been submitted.");
+        toast.success(t("skillDetail.reportSubmitted"));
       } else {
-        toast.info("You have already reported this skill.");
+        toast.info(t("skillDetail.alreadyReported"));
       }
     } catch (error) {
       console.error("Failed to report skill", error);
-      setReportError(formatReportError(error));
+      const err = formatReportError(error);
+      setReportError(err === "skillDetail.unableToSubmit" ? t(err) : err);
       setIsSubmittingReport(false);
     }
   };
@@ -344,9 +347,9 @@ export function SkillDetailPage({
       <main className="py-10">
         <Container>
           <EmptyState
-            title="Skill not found"
-            description="The skill you're looking for doesn't exist or may have been removed."
-            action={{ label: "Browse skills", href: "/skills" }}
+            title={t("skillDetail.skillNotFound")}
+            description={t("skillDetail.skillNotFoundDesc")}
+            action={{ label: t("skillDetail.browseSkills"), href: "/skills" }}
           />
         </Container>
       </main>
@@ -412,10 +415,10 @@ export function SkillDetailPage({
           {nixSnippet ? (
             <Card>
               <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">
-                Install via Nix
+                {t("skillDetail.installViaNix")}
               </h2>
               <p className="text-sm text-[color:var(--ink-soft)]">
-                {nixSystems.length ? `Systems: ${nixSystems.join(", ")}` : "nix-clawdbot"}
+                {nixSystems.length ? t("skillDetail.systems", { systems: nixSystems.join(", ") }) : "nix-clawdbot"}
               </p>
               <pre className="hero-install-code mt-3">{nixSnippet}</pre>
             </Card>
@@ -424,10 +427,10 @@ export function SkillDetailPage({
           {configExample ? (
             <Card>
               <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">
-                Config example
+                {t("skillDetail.configExample")}
               </h2>
               <p className="text-sm text-[color:var(--ink-soft)]">
-                Starter config for this plugin bundle.
+                {t("skillDetail.starterConfigDesc")}
               </p>
               <pre className="hero-install-code mt-3">{configExample}</pre>
             </Card>
@@ -452,7 +455,7 @@ export function SkillDetailPage({
           <ClientOnly
             fallback={
               <Card>
-                <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">Comments</h2>
+                <h2 className="font-display text-lg font-bold text-[color:var(--ink)]">{t("skillDetail.comments")}</h2>
                 <div className="flex flex-col gap-3 pt-2">
                   <Skeleton className="h-4 w-48" />
                   <Skeleton className="h-20 w-full" />

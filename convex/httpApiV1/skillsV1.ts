@@ -33,7 +33,7 @@ type SearchSkillEntry = {
 };
 
 type ListSkillsResult = {
-  items: Array<{
+  page: Array<{
     skill: {
       _id: Id<"skills">;
       slug: string;
@@ -49,14 +49,18 @@ type ListSkillsResult = {
       version: string;
       createdAt: number;
       changelog: string;
+      changelogSource?: "auto" | "user";
       parsed?: {
         license?: "MIT-0";
         clawdis?: { os?: string[]; nix?: { plugin?: boolean; systems?: string[] } };
       };
     } | null;
   }>;
+  hasMore: boolean;
   nextCursor: string | null;
 };
+
+type AccessibleSkillResult = Doc<"skills">[];
 
 type PublicSkillVersionFile = {
   path: string;
@@ -82,6 +86,7 @@ type PublicSkillVersionResponse = {
   sha256hash?: string;
   vtAnalysis?: Doc<"skillVersions">["vtAnalysis"];
   llmAnalysis?: Doc<"skillVersions">["llmAnalysis"];
+  staticScan?: Doc<"skillVersions">["staticScan"];
   capabilityTags?: string[];
 };
 
@@ -139,6 +144,97 @@ type ListVersionsResult = {
   items: PublicSkillVersionResponse[];
   nextCursor: string | null;
 };
+
+type PublicReadableSkillResult = NonNullable<GetBySlugResult> & {
+  skill: NonNullable<NonNullable<GetBySlugResult>["skill"]>;
+};
+
+function toApiSkillVersion(
+  version: Doc<"skillVersions"> | null,
+): PublicSkillVersionResponse | null {
+  if (!version) return null;
+  return {
+    _id: version._id,
+    version: version.version,
+    createdAt: version.createdAt,
+    changelog: version.changelog,
+    changelogSource: version.changelogSource,
+    files: version.files.map((file) => ({
+      path: file.path,
+      size: file.size,
+      sha256: file.sha256,
+      contentType: file.contentType,
+    })),
+    parsed: version.parsed
+      ? {
+          license: version.parsed.license,
+          clawdis: version.parsed.clawdis,
+        }
+      : undefined,
+    softDeletedAt: version.softDeletedAt,
+    vtAnalysis: version.vtAnalysis,
+    llmAnalysis: version.llmAnalysis,
+    staticScan: version.staticScan,
+  };
+}
+
+async function getApiTokenReadableSkill(
+  ctx: ActionCtx,
+  request: Request,
+  slug: string,
+): Promise<Doc<"skills"> | null> {
+  const userId = await getOptionalApiTokenUserId(ctx, request);
+  if (!userId) return null;
+  const skill = (await ctx.runQuery(internal.skills.getSkillBySlugInternal, {
+    slug,
+  })) as Doc<"skills"> | null;
+  if (!skill) return null;
+  const canRead = (await ctx.runQuery(internal.skills.canReadSkillInternal, {
+    skillId: skill._id,
+    userId,
+  })) as boolean;
+  return canRead ? skill : null;
+}
+
+type ReadableSkillForRequest =
+  | {
+      source: "public";
+      result: PublicReadableSkillResult;
+      skill: PublicReadableSkillResult["skill"];
+    }
+  | {
+      source: "token";
+      result: null;
+      skill: Doc<"skills">;
+    };
+
+async function resolveReadableSkillForRequest(
+  ctx: ActionCtx,
+  request: Request,
+  slug: string,
+): Promise<ReadableSkillForRequest | null> {
+  const result = (await ctx.runQuery(api.skills.getBySlug, { slug })) as GetBySlugResult;
+  const publicSkill = result?.skill;
+  if (result && publicSkill) {
+    const publicResult: PublicReadableSkillResult = {
+      ...result,
+      skill: publicSkill,
+    };
+    return {
+      source: "public",
+      result: publicResult,
+      skill: publicSkill,
+    };
+  }
+
+  const readableSkill = await getApiTokenReadableSkill(ctx, request, slug);
+  if (!readableSkill) return null;
+  return {
+    source: "token",
+    result: null,
+    skill: readableSkill,
+  };
+}
 
 function sanitizeEvidence(
   evidence: ModerationEvidence[],
@@ -262,9 +358,7 @@ function mergeSecurityStatuses(statuses: NormalizedSecurityStatus[]) {
   );
 }
 
-function hasLlmDimensionWarnings(
-  dimensions: LlmEvalDimension[] | undefined,
-) {
+function hasLlmDimensionWarnings(dimensions: LlmEvalDimension[] | undefined) {
   if (!Array.isArray(dimensions)) return false;
   return dimensions.some((dimension) => {
     if (!dimension || typeof dimension !== "object") return false;
@@ -400,30 +494,25 @@ export async function resolveSkillVersionV1Handler(ctx: ActionCtx, request: Requ
   );
 }
 
-type SkillListSort =
-  | "updated"
-  | "downloads"
-  | "stars"
-  | "installsCurrent"
-  | "installsAllTime"
-  | "trending";
+type SkillListSort = "newest" | "updated" | "downloads" | "stars" | "installs" | "name";
 
 function parseListSort(value: string | null): SkillListSort {
   const normalized = value?.trim().toLowerCase();
+  if (normalized === "newest" || normalized === "created") return "newest";
   if (normalized === "downloads") return "downloads";
   if (normalized === "stars" || normalized === "rating") return "stars";
+  if (normalized === "name") return "name";
   if (
     normalized === "installs" ||
     normalized === "install" ||
     normalized === "installscurrent" ||
-    normalized === "installs-current"
+    normalized === "installs-current" ||
+    normalized === "installsalltime" ||
+    normalized === "installs-all-time" ||
+    normalized === "trending"
   ) {
-    return "installsCurrent";
+    return "installs";
   }
-  if (normalized === "installsalltime" || normalized === "installs-all-time") {
-    return "installsAllTime";
-  }
-  if (normalized === "trending") return "trending";
   return "updated";
 }
 
@@ -433,16 +522,78 @@ export async function listSkillsV1Handler(ctx: ActionCtx, request: Request) {
 
   const url = new URL(request.url);
   const limit = toOptionalNumber(url.searchParams.get("limit"));
-  const rawCursor = url.searchParams.get("cursor")?.trim() || undefined;
+  const cursor = url.searchParams.get("cursor")?.trim() || undefined;
   const sort = parseListSort(url.searchParams.get("sort"));
-  const cursor = sort === "trending" ? undefined : rawCursor;
+  const scope = url.searchParams.get("scope")?.trim().toLowerCase();
   const nonSuspiciousOnly = resolveBooleanQueryParam(
     url.searchParams.get("nonSuspiciousOnly"),
     url.searchParams.get("nonSuspicious"),
   );
 
-  const result = (await ctx.runQuery(api.skills.listPublicPage, {
-    limit,
+  if (scope === "accessible" || scope === "mine") {
+    let userId: Id<"users">;
+    try {
+      userId = (await requireApiTokenUser(ctx, request)).userId;
+    } catch {
+      return text("Unauthorized", 401, rate.headers);
+    }
+
+    const skills = (await ctx.runQuery(internal.skills.listAccessibleForUserInternal, {
+      userId,
+      limit,
+    })) as AccessibleSkillResult;
+    const resolvedTagsList = await resolveTagsBatch(
+      ctx,
+      skills.map((skill) => skill.tags),
+    );
+    const latestVersions = await Promise.all(
+      skills.map((skill) =>
+        skill.latestVersionId
+          ? ctx.runQuery(internal.skills.getVersionByIdInternal, {
+              versionId: skill.latestVersionId,
+            })
+          : null,
+      ),
+    );
+    const items = skills.map((skill, idx) => {
+      const latestVersion = toApiSkillVersion(latestVersions[idx] as Doc<"skillVersions"> | null);
+      return {
+        slug: skill.slug,
+        displayName: skill.displayName,
+        summary: skill.summary ?? null,
+        visibility: skill.visibility ?? "public",
+        ownerUserId: skill.ownerUserId,
+        ownerPublisherId: skill.ownerPublisherId ?? null,
+        tags: resolvedTagsList[idx],
+        stats: skill.stats,
+        createdAt: skill.createdAt,
+        updatedAt: skill.updatedAt,
+        latestVersion: latestVersion
+          ? {
+              version: latestVersion.version,
+              createdAt: latestVersion.createdAt,
+              changelog: latestVersion.changelog,
+              license: latestVersion.parsed?.license ?? null,
+            }
+          : null,
+        metadata: latestVersion?.parsed?.clawdis
+          ? {
+              os: latestVersion.parsed.clawdis.os ?? null,
+              systems: latestVersion.parsed.clawdis.nix?.systems ?? null,
+            }
+          : null,
+        moderation: {
+          status: skill.moderationStatus ?? "active",
+          reason: skill.moderationReason ?? null,
+          isSuspicious: Boolean(skill.isSuspicious),
+        },
+      };
+    });
+    return json({ items, nextCursor: null }, 200, rate.headers);
+  }
+
+  const result = (await ctx.runQuery(api.skills.listPublicPageV4, {
+    numItems: limit,
     cursor,
     sort,
     nonSuspiciousOnly: nonSuspiciousOnly || undefined,
@@ -451,10 +602,10 @@ export async function listSkillsV1Handler(ctx: ActionCtx, request: Request) {
   // Batch resolve all tags in a single query instead of N queries
   const resolvedTagsList = await resolveTagsBatch(
     ctx,
-    result.items.map((item) => item.skill.tags),
+    result.page.map((item) => item.skill.tags),
   );
 
-  const items = result.items.map((item, idx) => ({
+  const items = result.page.map((item, idx) => ({
     slug: item.skill.slug,
     displayName: item.skill.displayName,
     summary: item.skill.summary ?? null,
@@ -543,13 +694,57 @@ export async function skillsGetRouterV1Handler(ctx: ActionCtx, request: Request)
   const third = segments[2];
 
   if (segments.length === 1) {
-    const result = (await ctx.runQuery(api.skills.getBySlug, { slug })) as GetBySlugResult;
-    if (!result?.skill) {
+    const resolved = await resolveReadableSkillForRequest(ctx, request, slug);
+    if (!resolved) {
       const hidden = await describeOwnerVisibleSkillState(ctx, request, slug);
       if (hidden) return text(hidden.message, hidden.status, rate.headers);
       return text("Skill not found", 404, rate.headers);
     }
 
+    if (resolved.source === "token") {
+      const readableSkill = resolved.skill;
+      const latestVersion = readableSkill.latestVersionId
+        ? toApiSkillVersion(
+            (await ctx.runQuery(internal.skills.getVersionByIdInternal, {
+              versionId: readableSkill.latestVersionId,
+            })) as Doc<"skillVersions"> | null,
+          )
+        : null;
+      const [tags] = await resolveTagsBatch(ctx, [readableSkill.tags]);
+      return json(
+        {
+          skill: {
+            slug: readableSkill.slug,
+            displayName: readableSkill.displayName,
+            summary: readableSkill.summary ?? null,
+            tags,
+            stats: readableSkill.stats,
+            createdAt: readableSkill.createdAt,
+            updatedAt: readableSkill.updatedAt,
+          },
+          latestVersion: latestVersion
+            ? {
+                version: latestVersion.version,
+                createdAt: latestVersion.createdAt,
+                changelog: latestVersion.changelog,
+                license: latestVersion.parsed?.license ?? null,
+              }
+            : null,
+          metadata: latestVersion?.parsed?.clawdis
+            ? {
+                os: latestVersion.parsed.clawdis.os ?? null,
+                systems: latestVersion.parsed.clawdis.nix?.systems ?? null,
+              }
+            : null,
+          owner: null,
+          moderation: null,
+        },
+        200,
+        rate.headers,
+      );
+    }
+
+    const result = resolved.result;
     const [tags] = await resolveTagsBatch(ctx, [result.skill.tags]);
     return json(
       {
@@ -685,17 +880,32 @@ export async function skillsGetRouterV1Handler(ctx: ActionCtx, request: Request)
   }
 
   if (second === "versions" && segments.length === 2) {
-    const skillResult = (await ctx.runQuery(api.skills.getBySlug, { slug })) as GetBySlugResult;
-    if (!skillResult?.skill) return text("Skill not found", 404, rate.headers);
+    const resolved = await resolveReadableSkillForRequest(ctx, request, slug);
+    if (!resolved) return text("Skill not found", 404, rate.headers);
 
     const url = new URL(request.url);
     const limit = toOptionalNumber(url.searchParams.get("limit"));
     const cursor = url.searchParams.get("cursor")?.trim() || undefined;
-    const versionsResult = (await ctx.runQuery(api.skills.listVersionsPage, {
-      skillId: skillResult.skill._id,
-      limit,
-      cursor,
-    })) as ListVersionsResult;
+    const versionsResult =
+      resolved.source === "public"
+        ? ((await ctx.runQuery(api.skills.listVersionsPage, {
+            skillId: resolved.skill._id,
+            limit,
+            cursor,
+          })) as ListVersionsResult)
+        : ({
+            items: (
+              (await ctx.runQuery(internal.skills.listVersionsInternal, {
+                skillId: resolved.skill._id,
+              })) as Doc<"skillVersions">[]
+            )
+              .filter((version) => !version.softDeletedAt)
+              .sort((a, b) => b.createdAt - a.createdAt)
+              .slice(0, limit ?? 20)
+              .map((version) => toApiSkillVersion(version)!)
+              .filter(Boolean),
+            nextCursor: null,
+          } satisfies ListVersionsResult);
 
     const items = versionsResult.items
       .filter((version) => !version.softDeletedAt)
@@ -710,20 +920,28 @@ export async function skillsGetRouterV1Handler(ctx: ActionCtx, request: Request)
   }
 
   if (second === "versions" && third && segments.length === 3) {
-    const skillResult = (await ctx.runQuery(api.skills.getBySlug, { slug })) as GetBySlugResult;
-    if (!skillResult?.skill) return text("Skill not found", 404, rate.headers);
+    const resolved = await resolveReadableSkillForRequest(ctx, request, slug);
+    if (!resolved) return text("Skill not found", 404, rate.headers);
 
-    const version = (await ctx.runQuery(api.skills.getVersionBySkillAndVersion, {
-      skillId: skillResult.skill._id,
-      version: third,
-    })) as PublicSkillVersionResponse | null;
+    const version =
+      resolved.source === "public"
+        ? ((await ctx.runQuery(api.skills.getVersionBySkillAndVersion, {
+            skillId: resolved.skill._id,
+            version: third,
+          })) as PublicSkillVersionResponse | null)
+        : toApiSkillVersion(
+            (await ctx.runQuery(internal.skills.getVersionBySkillAndVersionInternal, {
+              skillId: resolved.skill._id,
+              version: third,
+            })) as Doc<"skillVersions"> | null,
+          );
     if (!version) return text("Version not found", 404, rate.headers);
     if (version.softDeletedAt) return text("Version not available", 410, rate.headers);
     const security = buildSkillSecuritySnapshot(version);
 
     return json(
       {
-        skill: { slug: skillResult.skill.slug, displayName: skillResult.skill.displayName },
+        skill: { slug: resolved.skill.slug, displayName: resolved.skill.displayName },
         version: {
           version: version.version,
           createdAt: version.createdAt,
@@ -749,13 +967,62 @@ export async function skillsGetRouterV1Handler(ctx: ActionCtx, request: Request)
     const versionParam = url.searchParams.get("version")?.trim();
     const tagParam = url.searchParams.get("tag")?.trim();
 
-    const result = (await ctx.runQuery(api.skills.getBySlug, { slug })) as GetBySlugResult;
-    if (!result?.skill) {
+    const resolved = await resolveReadableSkillForRequest(ctx, request, slug);
+    if (!resolved) {
       const hidden = await describeOwnerVisibleSkillState(ctx, request, slug);
       if (hidden) return text(hidden.message, hidden.status, rate.headers);
       return text("Skill not found", 404, rate.headers);
     }
 
+    if (resolved.source === "token") {
+      const readableSkill = resolved.skill;
+      let version = readableSkill.latestVersionId
+        ? toApiSkillVersion(
+            (await ctx.runQuery(internal.skills.getVersionByIdInternal, {
+              versionId: readableSkill.latestVersionId,
+            })) as Doc<"skillVersions"> | null,
+          )
+        : null;
+      if (versionParam) {
+        version = toApiSkillVersion(
+          (await ctx.runQuery(internal.skills.getVersionBySkillAndVersionInternal, {
+            skillId: readableSkill._id,
+            version: versionParam,
+          })) as Doc<"skillVersions"> | null,
+        );
+      } else if (tagParam) {
+        const versionId = readableSkill.tags[tagParam];
+        version = versionId
+          ? toApiSkillVersion(
+              (await ctx.runQuery(internal.skills.getVersionByIdInternal, {
+                versionId,
+              })) as Doc<"skillVersions"> | null,
+            )
+          : null;
+      }
+      if (!version) return text("Version not found", 404, rate.headers);
+      if (version.softDeletedAt) return text("Version not available", 410, rate.headers);
+      const security = buildSkillSecuritySnapshot(version);
+      return json(
+        {
+          skill: {
+            slug: readableSkill.slug,
+            displayName: readableSkill.displayName,
+          },
+          version: {
+            version: version.version,
+            createdAt: version.createdAt,
+            changelogSource: version.changelogSource ?? null,
+          },
+          moderation: null,
+          security,
+        },
+        200,
+        rate.headers,
+      );
+    }
+
+    const result = resolved.result;
     let version = result.latestVersion;
     if (versionParam) {
       version = await ctx.runQuery(api.skills.getVersionBySkillAndVersion, {
@@ -821,21 +1088,21 @@ export async function skillsGetRouterV1Handler(ctx: ActionCtx, request: Request)
     const versionParam = url.searchParams.get("version")?.trim();
     const tagParam = url.searchParams.get("tag")?.trim();
 
-    const skillResult = (await ctx.runQuery(api.skills.getBySlug, { slug })) as GetBySlugResult;
-    if (!skillResult?.skill) return text("Skill not found", 404, rate.headers);
+    const resolved = await resolveReadableSkillForRequest(ctx, request, slug);
+    if (!resolved) return text("Skill not found", 404, rate.headers);
 
-    let version: Doc<"skillVersions"> | null = skillResult.skill.latestVersionId
+    let version: Doc<"skillVersions"> | null = resolved.skill.latestVersionId
       ? await ctx.runQuery(internal.skills.getVersionByIdInternal, {
-          versionId: skillResult.skill.latestVersionId,
+          versionId: resolved.skill.latestVersionId,
         })
       : null;
     if (versionParam) {
       version = await ctx.runQuery(internal.skills.getVersionBySkillAndVersionInternal, {
-        skillId: skillResult.skill._id,
+        skillId: resolved.skill._id,
         version: versionParam,
       });
     } else if (tagParam) {
-      const versionId = skillResult.skill.tags[tagParam];
+      const versionId = resolved.skill.tags[tagParam];
       if (versionId) {
         version = await ctx.runQuery(internal.skills.getVersionByIdInternal, { versionId });
       }

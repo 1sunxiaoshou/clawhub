@@ -157,7 +157,7 @@ async function packageApiUrl(path: string) {
     // paths work. In local dev, Nitro intercepts the request before Vite's
     // proxy, so we must use the Convex site URL directly.
     const convexSiteUrl = getRuntimeEnv("VITE_CONVEX_SITE_URL");
-    if (convexSiteUrl && window.location.hostname === "localhost") {
+    if (convexSiteUrl) {
       return new URL(normalizedPath, convexSiteUrl);
     }
     return new URL(normalizedPath, window.location.origin);

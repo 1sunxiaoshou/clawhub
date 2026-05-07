@@ -7,6 +7,9 @@ import Header from "../components/Header";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: (props: { children: ReactNode }) => <a href="/">{props.children}</a>,
+  useLocation: () => ({
+    pathname: "/",
+  }),
 }));
 
 vi.mock("@convex-dev/auth/react", () => ({
@@ -27,7 +30,7 @@ vi.mock("../lib/useAuthStatus", () => ({
 vi.mock("../lib/theme", () => ({
   applyTheme: vi.fn(),
   useThemeMode: () => ({
-    mode: "system",
+    mode: "light",
     setMode: vi.fn(),
   }),
 }));
@@ -88,5 +91,12 @@ describe("Header", () => {
     render(<Header />);
 
     expect(screen.queryByText("Packages")).toBeNull();
+  });
+
+  it("renders icon-only sign-in control when signed out", () => {
+    render(<Header />);
+
+    expect(screen.getByRole("button", { name: /sign in/i })).toBeTruthy();
+    expect(screen.queryByText("使用 GitHub 登录")).toBeNull();
   });
 });
